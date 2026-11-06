@@ -2,6 +2,8 @@ import math
 import hashlib
 import json
 import re
+import urllib.parse
+import uuid
 from datetime import datetime, timezone
 
 from taskvault_catalog import currency, get_product, index_meta, load_catalog
@@ -73,8 +75,38 @@ def match_product(text):
     return best
 
 
-def is_research_request(text):
+def resolve_product(text):
     product = match_product(text)
+    if product:
+        return product
+    normalized = re.sub(r"[.?!]+$", "", normalize_text(text)).strip()
+    match = re.search(
+        r"(?:source|find|compare|procure|order|buy|get)?\s*(?:\d[\d,]*\s*(?:boxes?|cartons?|cases?|packs?|units?|pcs?|pieces?)\s*(?:of\s+)?)(?P<item>[a-z0-9][a-z0-9\s\-_/]+?)(?:\s+(?:from|at|under|with|for|via|within|\.|\?|$)|$)",
+        normalized,
+        re.IGNORECASE,
+    )
+    if match:
+        item = match.group("item").strip()
+        if item and len(item) >= 3 and item not in GENERIC_ALIASES:
+            key = re.sub(r"[^a-z0-9]+", "-", item).strip("-")
+            name = item.title()
+            return {
+                "key": key or "custom-product",
+                "name": name,
+                "short_name": name,
+                "unit": "unit",
+                "pack_size": 1,
+                "carton_size": 1,
+                "specs": "",
+                "image": "",
+                "aliases": [item],
+                "offers": [],
+            }
+    return None
+
+
+def is_research_request(text):
+    product = resolve_product(text)
     if not product:
         return False
     words = set(re.findall(r"[a-z]+", normalize_text(text)))
@@ -411,16 +443,236 @@ def recommendation_text(product, quantity, offers_payload):
     return " · ".join(parts)
 
 
+def _capture_supplier_name(capture):
+    title = str(capture.get("title") or "").strip()
+    if title:
+        head = re.split(r"\s+(?:\-|:|·|\|)\s+", title)[0].strip()
+        if len(head) >= 3:
+            return head[:120]
+    parsed = urllib.parse.urlsplit(capture.get("final_url") or capture.get("url") or "")
+    host = parsed.hostname or capture.get("host") or ""
+    parts = [chunk for chunk in host.split(".") if chunk and chunk not in ("www", "m", "shop")]
+    return (parts[0].replace("-", " ").title() if parts else "Captured supplier")[:120]
+
+
+def _extract_first_number(text, pattern):
+    match = re.search(pattern, text, flags=re.IGNORECASE)
+    if not match:
+        return None
+    for group in match.groups():
+        if group:
+            try:
+                return float(str(group).replace(",", ""))
+            except ValueError:
+                return None
+    return None
+
+
+def _live_offers_from_captures(product, quantity, browser_payload):
+    offers = []
+    captures = list(browser_payload.get("captures") or [])
+    for index, capture in enumerate(captures, start=1):
+        if not isinstance(capture, dict):
+            continue
+        text = str(capture.get("text_excerpt") or "")
+        unit_price = _extract_first_number(text, r"(?:usd|\$)\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)")
+        moq = _extract_first_number(text, r"(?:moq|minimum order)\D{0,16}([0-9][0-9,]*)")
+        lead = _extract_first_number(text, r"([0-9]{1,3})\s*(?:-|to)?\s*[0-9]{0,3}\s*(?:business\s+)?days?")
+        requested_units = quantity["requested_units"]
+        minimum_units = int(moq or 1)
+        order_units = max(requested_units, minimum_units)
+        has_price = unit_price is not None and unit_price > 0
+        effective_unit_price = round(float(unit_price), 2) if has_price else 999999.0
+        landed_cost = round(effective_unit_price * order_units, 2)
+        final_url = capture.get("final_url") or capture.get("url") or ""
+        offer = {
+            "id": "live-{}-{}".format(index, uuid.uuid4().hex[:6]),
+            "product_key": product["key"],
+            "product_name": product["name"],
+            "product_short_name": product.get("short_name", product["name"]),
+            "supplier": _capture_supplier_name(capture),
+            "supplier_slug": "",
+            "location": "Unknown",
+            "unit": product.get("unit", "unit"),
+            "pack_size": int(product.get("pack_size", 1) or 1),
+            "unit_price": effective_unit_price,
+            "price_known": has_price,
+            "previous_price": None,
+            "requested_units": requested_units,
+            "order_units": order_units,
+            "moq_units": minimum_units,
+            "moq_label": "{} {}".format(minimum_units, plural_unit(product.get("unit", "unit"), minimum_units)),
+            "moq_met": requested_units >= minimum_units,
+            "subtotal": landed_cost,
+            "shipping": 0.0,
+            "free_shipping": False,
+            "landed_cost": landed_cost,
+            "landed_unit_price": round(landed_cost / order_units, 2) if order_units else 0,
+            "lead_time_days": int(lead or 0),
+            "rating": 0,
+            "reviews": 0,
+            "verified": False,
+            "verification_status": "captured_unverified",
+            "certifications": [],
+            "return_window_days": 0,
+            "image_url": product.get("image", ""),
+            "source_url": final_url,
+            "source_title": capture.get("title") or "Captured source",
+            "captured_at": capture.get("captured_at") or utc_now(),
+            "highlights": ["Read-only browser capture", "Extraction may be partial"],
+            "specs": product.get("specs", ""),
+            "currency": "USD",
+            "capture_error": capture.get("error"),
+        }
+        offer["evidence"] = {
+            "source_url": final_url,
+            "source_title": offer["source_title"],
+            "captured_at": offer["captured_at"],
+            "screenshot_file": capture.get("screenshot_file"),
+            "screenshot_sha256": capture.get("screenshot_sha256"),
+            "text_sha256": capture.get("text_sha256"),
+            "claims": [
+                {"field": "unit_price", "value": unit_price, "status": "captured" if has_price else "unknown"},
+                {"field": "moq_units", "value": minimum_units, "status": "captured" if moq else "unknown"},
+                {"field": "lead_time_days", "value": int(lead or 0), "status": "captured" if lead else "unknown"},
+            ],
+        }
+        offers.append(offer)
+
+    offers.sort(key=lambda offer: (
+        0 if offer.get("price_known") else 1,
+        offer.get("landed_cost", 0),
+        offer.get("lead_time_days", 9999),
+    ))
+    for rank, offer in enumerate(offers, start=1):
+        offer["rank"] = rank
+        offer["score"] = rank
+        offer["score_breakdown"] = {
+            "method": "live_capture_v1",
+            "components": {
+                "missing_price_penalty": 1 if not offer.get("price_known") else 0,
+                "rank_penalty": rank,
+            },
+            "total_penalty": rank + (1 if not offer.get("price_known") else 0),
+        }
+        badges = ["Live capture"]
+        if not offer.get("price_known"):
+            badges.append("Price missing")
+        if offer.get("capture_error"):
+            badges.append("Capture warning")
+        offer["badges"] = badges
+        offer["reasons"] = [
+            "Observed from a read-only browser capture.",
+            "Supplier documentation is not yet verified.",
+        ]
+    return offers
+
+
+def run_live_research(query, browser_payload, buyer=None, sources=None):
+    product = resolve_product(query)
+    if not product:
+        raise ValueError("Name a product to source, for example nitrile gloves or 5 mL syringes.")
+    quantity = extract_quantity(query, product)
+    offers = _live_offers_from_captures(product, quantity, browser_payload)
+    if not offers:
+        raise ValueError("No captures were available for this sourcing request.")
+    priced = [offer for offer in offers if offer.get("price_known")]
+    best = priced[0] if priced else offers[0]
+    fastest = min(offers, key=lambda offer: offer.get("lead_time_days", 9999))
+
+    lines = [
+        "I captured {} source page(s) in read-only browser mode for {} of {}.".format(
+            len(browser_payload.get("captures") or []), quantity["quantity_label"], product["name"].lower()
+        )
+    ]
+    if priced:
+        lines.append(
+            "{} currently has the lowest extracted unit price at {} per {}, with estimated landed cost {} for this quantity.".format(
+                best["supplier"], _money(best["unit_price"]), best["unit"], _money(best["landed_cost"])
+            )
+        )
+    else:
+        lines.append("I could not extract reliable numeric pricing from the captured pages yet.")
+    lines.append(
+        "{} appears fastest at {}. Missing fields remain unknown until confirmed in writing with each supplier.".format(
+            fastest["supplier"], _day_label(fastest.get("lead_time_days", 0) or 0)
+        )
+    )
+    lines.append("No message was sent, no order was placed, and nothing was paid.")
+
+    recommendation = (
+        "Recommended next step: review the captures and request confirmed written quotes from {} first.".format(best["supplier"])
+        if priced else
+        "Recommended next step: open each capture and request a confirmed written quote before ranking by price."
+    )
+
+    return {
+        "product": {
+            "key": product["key"],
+            "name": product["name"],
+            "short_name": product.get("short_name", product["name"]),
+            "unit": product.get("unit", "unit"),
+            "specs": product.get("specs", ""),
+            "image": product.get("image", ""),
+        },
+        "requested_units": quantity["requested_units"],
+        "quantity": quantity,
+        "currency": "USD",
+        "offers": offers,
+        "ranking_method": {
+            "id": "live_capture_v1",
+            "description": "Offers with extracted price rank first by landed estimate; captures without numeric price are ranked after priced offers.",
+            "weights": {"price_known": 1.0, "landed_cost": 1.0, "lead_time_days": 0.5},
+            "tie_break": "faster lead time",
+        },
+        "best_value_id": best["id"],
+        "cheapest_id": best["id"] if priced else None,
+        "fastest_id": fastest["id"],
+        "savings_vs_highest": None,
+        "savings_vs_average": None,
+        "verified_count": 0,
+        "evidence_count": len(browser_payload.get("captures") or []),
+        "summary": " ".join(lines),
+        "recommendation": recommendation,
+        "limitations": [
+            "Live capture extraction is best-effort and can miss or misread fields.",
+            "Unverified fields remain unknown and must be confirmed directly with suppliers.",
+            "No external action has been taken.",
+        ],
+        "user_sources": list(sources or []),
+        "captures": browser_payload.get("captures") or [],
+        "capture_report": {
+            "requested_count": browser_payload.get("requested_count", 0),
+            "captured_count": browser_payload.get("captured_count", 0),
+            "error_count": browser_payload.get("error_count", 0),
+            "blocked_requests": browser_payload.get("blocked_requests", []),
+        },
+        "index": {"is_demo": False, "version": "live-capture-v1"},
+        "generated_at": utc_now(),
+    }
+
+
 def run_research(query, buyer=None, sources=None):
-    product = match_product(query)
+    product = resolve_product(query)
     if not product:
         raise ValueError("Name a product to source, for example nitrile gloves or 5 mL syringes.")
     quantity = extract_quantity(query, product)
     offers_payload = compute_offers(product, quantity["requested_units"])
     if not offers_payload:
-        raise ValueError("No supplier listings are available for that product yet.")
-    summary = build_summary(product, quantity, offers_payload, buyer=buyer)
-    recommendation = recommendation_text(product, quantity, offers_payload)
+        if sources:
+            offers_payload = {
+                "offers": [],
+                "ranking_method": {"id": "pending_live_capture", "description": "Awaiting live capture offers", "weights": {}, "tie_break": ""},
+                "best_value_id": None,
+                "cheapest_id": None,
+                "fastest_id": None,
+                "savings_vs_highest": None,
+                "savings_vs_average": None,
+            }
+        else:
+            raise ValueError("No supplier listings are available for that product yet.")
+    summary = build_summary(product, quantity, offers_payload, buyer=buyer) if offers_payload.get("offers") else "Awaiting live source capture."
+    recommendation = recommendation_text(product, quantity, offers_payload) if offers_payload.get("offers") else "Capturing evidence from source pages."
     verified_count = sum(1 for offer in offers_payload["offers"] if offer["verified"])
     index = index_meta()
     if index.get("is_demo"):
@@ -517,18 +769,22 @@ def answer_from_result(question, payload, buyer=None):
             "links": [],
         }
     best = next((offer for offer in offers if offer["id"] == payload.get("best_value_id")), offers[0])
-    cheapest = min(offers, key=lambda offer: offer["landed_cost"])
+    priced = [offer for offer in offers if offer.get("price_known", True)]
+    cheapest = min(priced or offers, key=lambda offer: offer["landed_cost"])
     fastest = min(offers, key=lambda offer: offer["lead_time_days"])
     lowest_moq = min(offers, key=lambda offer: offer["moq_units"])
     if any(word in normalized for word in ("cheapest", "lowest price", "least expensive", "cost")):
-        offer = cheapest
-        answer = "{} has the lowest landed cost at {}, or {} per {}. {}".format(
-            offer["supplier"],
-            _money(offer["landed_cost"]),
-            _money(offer["landed_unit_price"]),
-            offer["unit"],
-            "That listing is not fully verified yet." if not offer["verified"] else "Its supplier documentation is verified.",
-        )
+        if not priced:
+            answer = "I could not extract a reliable numeric price from the captured evidence yet. Open the captures and request written quotes to compare landed cost safely."
+        else:
+            offer = cheapest
+            answer = "{} has the lowest landed cost at {}, or {} per {}. {}".format(
+                offer["supplier"],
+                _money(offer["landed_cost"]),
+                _money(offer["landed_unit_price"]),
+                offer["unit"],
+                "That listing is not fully verified yet." if not offer["verified"] else "Its supplier documentation is verified.",
+            )
     elif any(word in normalized for word in ("fastest", "delivery", "lead time", "quickest", "ship")):
         offer = fastest
         answer = "{} is the fastest option, with a {} and {} landed cost.".format(

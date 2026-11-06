@@ -212,7 +212,7 @@
         <p class="agent-run-caption" id="agent-run-caption">Start a request to see its progress here.</p>
         <ol class="agent-steps" id="agent-steps">
           <li><span class="agent-step-dot"></span><span><strong>Understand request</strong><small>Product and quantity</small></span></li>
-          <li><span class="agent-step-dot"></span><span><strong>Match catalog</strong><small>Bundled supplier offers</small></span></li>
+          <li><span class="agent-step-dot"></span><span><strong>Gather evidence</strong><small>Catalog + allowed pages</small></span></li>
           <li><span class="agent-step-dot"></span><span><strong>Compare offers</strong><small>Cost, MOQ, and delivery</small></span></li>
           <li><span class="agent-step-dot"></span><span><strong>Prepare recommendation</strong><small>Evidence stays attached</small></span></li>
         </ol>
@@ -262,7 +262,7 @@
     <form id="source-form">
       <label for="source-input">Public product or supplier pages</label>
       <textarea id="source-input" rows="4" placeholder="https://supplier.example/product-a&#10;https://another.example/item-42"></textarea>
-      <p class="field-help">One URL per line. Local, private, and credential-bearing URLs are rejected before a task is created.</p>
+      <p class="field-help">One public URL per line. Up to 3 HTTPS pages are opened read-only with timestamped screenshots; every link stays stored as a reference. Local, private, and credential-bearing URLs are rejected before a task is created.</p>
       <p class="field-error" id="source-error" role="alert" hidden>Enter public http or https URLs without embedded credentials or local/private hosts.</p>
       <div class="modal-actions">
         <button class="quiet-button" type="button" data-close-dialog>Cancel</button>
@@ -332,6 +332,51 @@
     <div class="modal-actions">
       <button class="primary-button" id="notice-action" type="button">Got it</button>
     </div>
+  </dialog>
+
+  <dialog class="modal brief-modal" id="brief-dialog" aria-labelledby="brief-title" aria-describedby="brief-hint">
+    <div class="modal-head brief-head">
+      <div>
+        <p class="kicker">Sourcing brief <span class="brief-field-count">1 detail needed</span></p>
+        <h2 id="brief-title">Complete the request</h2>
+      </div>
+      <button class="icon-button" type="button" data-close-dialog aria-label="Close">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <form id="brief-form">
+      <div class="brief-product">
+        <img id="brief-image" src="./assets/taskvault-mark.svg" alt="" width="40" height="40" decoding="async">
+        <div class="brief-product-copy">
+          <strong id="brief-product-name">Sourcing request</strong>
+          <span id="brief-product-meta"></span>
+        </div>
+      </div>
+      <p class="brief-question" id="brief-question">How many do you need?</p>
+      <div class="brief-input-grid">
+        <div class="brief-field">
+          <label for="brief-quantity">Quantity</label>
+          <input id="brief-quantity" type="number" min="1" max="100000" step="1" inputmode="numeric" placeholder="500" required>
+        </div>
+        <div class="brief-field">
+          <label for="brief-unit">Order unit</label>
+          <select id="brief-unit"></select>
+        </div>
+      </div>
+      <div class="brief-presets" role="group" aria-label="Quick quantities">
+        <span>Quick pick</span>
+        <button type="button" data-brief-preset="100">100</button>
+        <button type="button" data-brief-preset="250">250</button>
+        <button type="button" data-brief-preset="500">500</button>
+        <button type="button" data-brief-preset="1000">1,000</button>
+      </div>
+      <p class="brief-hint" id="brief-hint">TaskVault will calculate landed cost and check the supplier minimum for this exact quantity.</p>
+      <p class="field-error" id="brief-error" role="alert" hidden>Enter a whole number from 1 to 100,000.</p>
+      <div class="modal-actions">
+        <button class="quiet-button" type="button" data-close-dialog>Cancel</button>
+        <button class="primary-button" type="submit">Compare offers<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></button>
+      </div>
+    </form>
   </dialog>
 
   <div class="voice-overlay" id="voice-overlay" hidden>

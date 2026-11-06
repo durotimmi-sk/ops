@@ -133,6 +133,24 @@ def initialize_database():
                 created_at TEXT NOT NULL,
                 PRIMARY KEY (task_id, offer_id)
             );
+            CREATE TABLE IF NOT EXISTS task_captures (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+                source_url TEXT NOT NULL,
+                final_url TEXT,
+                host TEXT,
+                title TEXT,
+                http_status INTEGER,
+                captured_at TEXT,
+                screenshot_file TEXT,
+                screenshot_sha256 TEXT,
+                screenshot_bytes INTEGER,
+                text_sha256 TEXT,
+                text_excerpt TEXT,
+                blocked_requests INTEGER NOT NULL DEFAULT 0,
+                error TEXT,
+                created_at TEXT NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS price_watches (
                 id TEXT PRIMARY KEY,
                 task_id TEXT,
@@ -176,6 +194,7 @@ def initialize_database():
             CREATE INDEX IF NOT EXISTS idx_task_events_task ON task_events(task_id, id);
             CREATE INDEX IF NOT EXISTS idx_conversation_messages ON conversation_messages(conversation_id, id);
             CREATE INDEX IF NOT EXISTS idx_offers_task ON offers(task_id);
+            CREATE INDEX IF NOT EXISTS idx_task_captures_task ON task_captures(task_id, id);
             CREATE INDEX IF NOT EXISTS idx_watches_status ON price_watches(status);
             CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(status);
             """
@@ -472,6 +491,63 @@ def save_research(task_id, research):
                     timestamp,
                 ),
             )
+
+
+def save_task_captures(task_id, captures, artifact_base_url=None):
+    if not isinstance(captures, list):
+        return
+    timestamp = utc_now()
+    with connect() as connection:
+        connection.execute("DELETE FROM task_captures WHERE task_id = ?", (task_id,))
+        for capture in captures:
+            if not isinstance(capture, dict):
+                continue
+            screenshot = capture.get("screenshot_file")
+            if screenshot and artifact_base_url:
+                screenshot = "{}/{}".format(artifact_base_url.rstrip("/"), screenshot)
+            connection.execute(
+                """
+                INSERT INTO task_captures
+                    (task_id, source_url, final_url, host, title, http_status, captured_at,
+                     screenshot_file, screenshot_sha256, screenshot_bytes, text_sha256,
+                     text_excerpt, blocked_requests, error, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    task_id,
+                    capture.get("url", ""),
+                    capture.get("final_url"),
+                    capture.get("host"),
+                    capture.get("title"),
+                    capture.get("http_status"),
+                    capture.get("captured_at"),
+                    screenshot,
+                    capture.get("screenshot_sha256"),
+                    int(capture.get("screenshot_bytes", 0) or 0),
+                    capture.get("text_sha256"),
+                    capture.get("text_excerpt", ""),
+                    int(capture.get("blocked_requests", 0) or 0),
+                    capture.get("error"),
+                    timestamp,
+                ),
+            )
+
+
+def list_task_captures(task_id, limit=50):
+    with connect() as connection:
+        rows = connection.execute(
+            """
+            SELECT id, task_id, source_url, final_url, host, title, http_status, captured_at,
+                   screenshot_file, screenshot_sha256, screenshot_bytes, text_sha256,
+                   text_excerpt, blocked_requests, error, created_at
+            FROM task_captures
+            WHERE task_id = ?
+            ORDER BY id ASC
+            LIMIT ?
+            """,
+            (task_id, max(1, min(int(limit), 200))),
+        ).fetchall()
+    return [dict(row) for row in rows]
 
 
 def _task_from_row(row):
@@ -830,6 +906,7 @@ def task_result(task_id):
         "summary": task.get("summary"),
         "recommendation": task.get("recommendation"),
         "research": research,
+        "captures": list_task_captures(task["id"]),
         "sandbox": task.get("sandbox"),
         "error": task.get("error"),
         "created_at": task["created_at"],

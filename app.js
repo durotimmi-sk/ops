@@ -39,6 +39,7 @@ const state = {
   draftApproval: null,
   watchTarget: null,
   orderTarget: null,
+  brief: null,
   voiceActive: false,
   voiceRecognition: null,
   noticeAction: null,
@@ -99,6 +100,7 @@ const ICON = {
   watch: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18V6M4 18h16"/><path d="m7 14 4-4 3 2 5-6"/></svg>',
   order: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h12v16H6z"/><path d="M9 8h6m-6 4h6m-6 4h4"/></svg>',
   run: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="m8.5 12 2.2 2.2 4.8-4.8"/></svg>',
+  arrow: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>',
 };
 
 function escapeHtml(value) {
@@ -481,6 +483,19 @@ function renderMessage(message, index) {
     body = renderLoader(message);
   } else if (message.kind === "research") {
     body = renderResearch(message);
+  } else if (message.kind === "clarification") {
+    const clarification = message.clarification || {};
+    const product = clarification.product || {};
+    body = `
+      <div class="clarification-card">
+        <div class="clarification-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 7.5v5m0 3.5h.01"/><circle cx="12" cy="12" r="9"/></svg></div>
+        <div class="clarification-copy">
+          <strong>One detail needed</strong>
+          <p>${escapeHtml(message.text || clarification.prompt || "Add the quantity to continue.")}</p>
+          ${product.short_name ? `<span class="clarification-product">${escapeHtml(product.short_name)}${product.specs ? ` · ${escapeHtml(product.specs)}` : ""}</span>` : ""}
+        </div>
+        <button class="clarification-action" type="button" data-action="clarify" data-message-index="${index}">Add quantity${ICON.arrow}</button>
+      </div>`;
   } else {
     const links = Array.isArray(message.links) ? message.links : [];
     body = `
@@ -518,13 +533,84 @@ function renderLoader(message) {
       <div class="loader-steps">
         <div class="loader-step is-done"><span class="dot"></span><span>Request accepted and checked</span></div>
         <div class="loader-step ${sandboxActive ? "is-active" : "is-done"}"><span class="dot"></span><span>Run sourcing worker</span></div>
-        <div class="loader-step ${sandboxDone ? "is-done" : ""}"><span class="dot"></span><span>Compare landed cost and store evidence</span></div>
+        <div class="loader-step ${sandboxDone ? "is-done" : ""}"><span class="dot"></span><span>Capture allowed sources, compare, and store evidence</span></div>
       </div>
       <div class="loader-links">
         <button type="button" data-action="activity">Open activity</button>
         <button type="button" data-action="help">Methodology</button>
       </div>
     </div>`;
+}
+
+function renderLiveCaptures(research) {
+  const captures = Array.isArray(research.captures)
+    ? research.captures.filter((capture) => capture && typeof capture === "object")
+    : [];
+  const browser = research.browser || {};
+  if (!captures.length && !browser.error) return "";
+  const capturedCount = captures.filter((capture) => capture.screenshot_url).length;
+  const browserInfo = browser.browser || {};
+  const receipt = browser.receipt || {};
+  const browserLabel = [browserInfo.name || "Chromium", browserInfo.version || receipt.browser_version || ""].filter(Boolean).join(" ");
+  const proxyBlocked = Number((Array.isArray(browser.blocked_proxy_requests) ? browser.blocked_proxy_requests.length : 0) || receipt.blocked_proxy_requests || 0);
+  const cards = captures.map((capture) => {
+    const title = capture.title || hostLabel(capture.final_url || capture.url || "");
+    const screenshotUrl = capture.screenshot_url ? apiUrl(capture.screenshot_url) : "";
+    const finalUrl = /^https:\/\//i.test(capture.final_url || "") ? capture.final_url : "";
+    const error = capture.error ? String(capture.error) : "";
+    const excerpt = !error ? truncate(capture.text_excerpt || "", 170) : "";
+    return `
+      <article class="capture-card${error ? " has-error" : ""}">
+        <div class="capture-frame">
+          ${screenshotUrl
+            ? `<a href="${escapeHtml(screenshotUrl)}" target="_blank" rel="noreferrer noopener" aria-label="Open screenshot of ${escapeHtml(title)}"><img src="${escapeHtml(screenshotUrl)}" alt="Screenshot of ${escapeHtml(title)}" loading="lazy" decoding="async"></a>`
+            : `<div class="capture-placeholder"><span>Capture blocked</span><small>${escapeHtml(error || "No screenshot was retained.")}</small></div>`}
+          <span class="capture-badge">${error ? "Blocked" : "Read-only"}</span>
+        </div>
+        <div class="capture-copy">
+          <span class="capture-host">${escapeHtml(capture.host || hostLabel(capture.url || ""))}</span>
+          <strong>${escapeHtml(title || "Source page")}</strong>
+          ${excerpt ? `<p>${escapeHtml(excerpt)}</p>` : error ? `<p class="capture-error">${escapeHtml(error)}</p>` : ""}
+          <div class="capture-meta">
+            <span>${escapeHtml(formatDate(capture.captured_at))}</span>
+            ${Number(capture.http_status) ? `<span>HTTP ${Number(capture.http_status)}</span>` : ""}
+            ${capture.blocked_requests ? `<span>${Number(capture.blocked_requests)} request${Number(capture.blocked_requests) === 1 ? "" : "s"} blocked</span>` : ""}
+          </div>
+          <div class="capture-links">
+            ${screenshotUrl ? `<a href="${escapeHtml(screenshotUrl)}" target="_blank" rel="noreferrer noopener">Open screenshot${ICON.external}</a>` : ""}
+            ${finalUrl ? `<a href="${escapeHtml(finalUrl)}" target="_blank" rel="noreferrer noopener">Visit page${ICON.external}</a>` : ""}
+          </div>
+        </div>
+      </article>`;
+  }).join("");
+  const modeLabel = receipt.mode === "browser-process" ? "Local browser process" : receipt.mode === "browser-bubblewrap" ? "Bubblewrap browser" : "Browser worker";
+  const receiptMarkup = receipt.worker_id
+    ? `<details class="capture-receipt${receipt.degraded ? " is-degraded" : ""}">
+        <summary><span class="capture-receipt-copy"><strong>Capture receipt</strong><small>${escapeHtml(modeLabel)} · ${capturedCount} of ${captures.length} page${captures.length === 1 ? "" : "s"} retained · ${Number(receipt.duration_ms || 0)} ms</small></span><span class="capture-receipt-disclosure">View details</span></summary>
+        <div class="capture-receipt-body">
+          ${receipt.degraded ? '<p class="capture-warning">Local development capture: the browser shares the host network namespace. Egress is still limited to the allowlist proxy. Use the Linux/Vultr browser worker for full filesystem containment.</p>' : ""}
+          <div class="capture-receipt-grid">
+            <div><span>Network policy</span><strong>${escapeHtml(receipt.network || "Allowlisted HTTPS only")}</strong></div>
+            <div><span>Filesystem</span><strong>${escapeHtml(receipt.filesystem || "Task-scoped browser profile")}</strong></div>
+            <div><span>Secrets</span><strong>${escapeHtml(receipt.secrets_policy || "No application secrets inherited")}</strong></div>
+            <div><span>Off-allowlist blocked</span><strong>${proxyBlocked} request${proxyBlocked === 1 ? "" : "s"}</strong></div>
+            <div><span>Cleanup</span><strong>${escapeHtml(receipt.teardown || "Task directory removed")}</strong></div>
+            <div><span>Run reference</span><strong>${escapeHtml(receipt.worker_id)}</strong></div>
+          </div>
+        </div>
+      </details>`
+    : "";
+  return `
+    <section class="live-captures" aria-label="Live source page capture">
+      <div class="live-captures-head">
+        <div><span class="live-captures-kicker">Live browser evidence</span><strong>${capturedCount ? `${capturedCount} source page${capturedCount === 1 ? "" : "s"} captured` : "Source pages were not captured"}</strong></div>
+        <span class="live-captures-device">${escapeHtml(browserLabel || "Read-only browser")}${capturedCount ? " · timestamped" : ""}</span>
+      </div>
+      <p class="live-captures-explainer">Only the pages you supplied were opened. Each capture is read-only, allowlist-bound, and paired with a timestamped screenshot.</p>
+      ${browser.error ? `<div class="capture-unavailable"><strong>Live capture unavailable</strong><span>${escapeHtml(browser.detail || browser.error)} Links remain stored references and were not opened.</span></div>` : ""}
+      ${cards ? `<div class="capture-grid">${cards}</div>` : ""}
+      ${receiptMarkup}
+    </section>`;
 }
 
 function renderResearch(message) {
@@ -537,19 +623,23 @@ function renderResearch(message) {
   const index = research.index || {};
   const isDemo = Boolean(index.is_demo);
   const rankingMethod = research.ranking_method || {};
+  const quantityLabel = research.quantity?.quantity_label || "quantity not specified";
   const providedSources = Array.isArray(research.user_sources)
     ? research.user_sources.filter((source) => typeof source === "string" && /^https?:\/\//i.test(source))
     : [];
+  const liveCaptures = Array.isArray(research.captures) ? research.captures : [];
+  const liveCaptureCount = liveCaptures.filter((capture) => capture && capture.screenshot_url).length;
+  const captureAttempted = Boolean(research.browser && (research.browser.receipt || research.browser.error));
+  const duration = Number(message.sandbox?.duration_ms || 0);
+  const durationLabel = duration ? `${(duration / 1000).toFixed(duration < 10000 ? 1 : 0)}s run` : "saved result";
   const sourceMarkup = providedSources.length
     ? `<section class="research-sources" aria-label="Links provided for this run">
-        <span class="research-sources-label">Links you added · not opened</span>
+        <span class="research-sources-label">Links you added · ${liveCaptureCount ? `${liveCaptureCount} captured read-only` : captureAttempted ? "capture attempted" : "not opened"}</span>
         <div class="research-source-list">
           ${providedSources.map((source) => `<a class="research-source" href="${escapeHtml(source)}" target="_blank" rel="noreferrer noopener" title="${escapeHtml(source)}">${escapeHtml(hostLabel(source))}${ICON.external}</a>`).join("")}
         </div>
       </section>`
     : "";
-  const quantityLabel = research.quantity?.quantity_label || "quantity not specified";
-  const bestPrice = bestOffer ? money(bestOffer.landed_cost) : "—";
   const fasterOffer = bestOffer && offers.length > 1
     ? offers.filter((offer) => offer.id !== bestOffer.id).sort((a, b) => Number(a.lead_time_days || 0) - Number(b.lead_time_days || 0))[0]
     : null;
@@ -561,48 +651,83 @@ function renderResearch(message) {
     : cheaperOffer
       ? `${escapeHtml(cheaperOffer.supplier)} costs ${money(Number(bestOffer.landed_cost) - Number(cheaperOffer.landed_cost))} less, but ranks lower on the selected criteria.`
       : "Best match across the listed cost, delivery, and supplier fields.";
+  const spotlightReason = Array.isArray(bestOffer?.reasons) && bestOffer.reasons.length
+    ? bestOffer.reasons.slice(0, 2).join(" · ")
+    : tradeoff;
+  const verifiedCount = Number(research.verified_count ?? offers.filter((offer) => offer.verified).length);
   const runSteps = [
     ["Request understood", `${quantityLabel}${research.quantity?.quantity_note ? ` · ${research.quantity.quantity_note}` : ""}`],
     [isDemo ? "Sample index searched" : "Supplier sources checked", isDemo ? `${offers.length} illustrative catalog records` : `${offers.length} supplier records`],
+    ...(providedSources.length ? [["Source pages captured", liveCaptureCount ? `${liveCaptureCount} read-only page${liveCaptureCount === 1 ? "" : "s"} with screenshots` : "Capture attempted; see browser receipt"]] : []),
     ["Offers compared", "Landed cost, delivery, minimum, and rating"],
-    ["Evidence attached", "Open a record to inspect the fields used"],
+    ["Evidence attached", liveCaptureCount ? "Source screenshots plus stored supplier fields" : "Open a record to inspect the fields used"],
   ];
   const runStepsMarkup = `<section class="agent-plan" aria-label="Completed research steps"><div class="agent-plan-heading"><strong>Research plan</strong><span>Complete · ${runSteps.length} steps</span></div><ol>${runSteps.map(([title, detail], index) => `<li><span class="agent-plan-number">${String(index + 1).padStart(2, "0")}</span><span class="agent-plan-copy"><strong>${escapeHtml(title)}</strong><small>${escapeHtml(detail)}</small></span><span class="agent-plan-status">Done</span></li>`).join("")}</ol></section>`;
-  const evidenceMarkup = `<section class="research-sources" aria-label="Evidence records"><div class="sources-title"><strong>${isDemo ? "Sample evidence records" : "Evidence records"}</strong><span>${offers.length} records · not live page captures</span></div><div class="research-source-list">${offers.slice(0, 3).map((offer) => `<a class="research-source evidence-chip" href="${escapeHtml(apiUrl(offer.source_url || "#"))}" target="_blank" rel="noreferrer noopener"><span class="evidence-chip-mark">${String(offer.supplier || "S").slice(0, 1).toUpperCase()}</span><span><strong>${escapeHtml(offer.supplier)}</strong><small>${isDemo ? "Bundled sample record" : "Stored evidence record"}</small></span>${ICON.external}</a>`).join("")}${offers.length > 3 ? `<span class="research-source more-sources">+${offers.length - 3} more</span>` : ""}</div></section>`;
-  const duration = Number(message.sandbox?.duration_ms || 0);
+  const evidenceMarkup = `<section class="research-sources" aria-label="Evidence records"><div class="sources-title"><strong>${isDemo ? "Sample evidence records" : "Evidence records"}</strong><span>${offers.length} records · stored supplier fields · live source pages captured separately</span></div><div class="research-source-list">${offers.slice(0, 4).map((offer) => `<a class="research-source evidence-chip" href="${escapeHtml(apiUrl(offer.source_url || "#"))}" target="_blank" rel="noreferrer noopener"><span class="evidence-chip-mark">${String(offer.supplier || "S").slice(0, 1).toUpperCase()}</span><span><strong>${escapeHtml(offer.supplier)}</strong><small>${isDemo ? "Bundled sample record" : "Stored evidence record"}</small></span>${ICON.external}</a>`).join("")}${offers.length > 4 ? `<span class="research-source more-sources">+${offers.length - 4} more</span>` : ""}</div></section>`;
+  const limitations = Array.isArray(research.limitations) ? research.limitations : [];
+  const traceMarkup = `
+    <details class="run-details">
+      <summary>
+        <span class="run-details-heading"><strong>Agent trace &amp; evidence</strong><small>${runSteps.length} steps · ${offers.length} offer records${liveCaptureCount ? ` · ${liveCaptureCount} live capture${liveCaptureCount === 1 ? "" : "s"}` : ""} · ${escapeHtml(durationLabel)}</small></span>
+        <span class="run-details-disclosure">Open</span>
+      </summary>
+      <div class="run-details-body">
+        ${runStepsMarkup}
+        ${evidenceMarkup}
+        ${sourceMarkup}
+        ${!isDemo && summary ? `<p class="trace-summary">${escapeHtml(summary)}</p>` : ""}
+        ${limitations.length ? `<section class="trace-limitations"><strong>Known limits</strong><ul>${limitations.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></section>` : ""}
+      </div>
+    </details>`;
   return `
     <div class="research">
-      <div class="response-topline"><span class="response-state"><span class="response-state-mark" aria-hidden="true"></span>${isDemo ? "Sample comparison" : "Comparison ready"}</span><span>${offers.length} offer${offers.length === 1 ? "" : "s"} · ${duration ? `${(duration / 1000).toFixed(duration < 10000 ? 1 : 0)}s run` : "saved result"}</span></div>
-      ${isDemo ? '<aside class="research-demo-note" role="note"><strong>Illustrative data</strong><span>These supplier details are sample records. No supplier websites or documents were checked. Do not use this result to make a purchase.</span></aside>' : ""}
-      <div class="research-intro">${isDemo ? `I compared ${offers.length} sample listings for <strong>${escapeHtml(quantityLabel)}</strong>${product.name ? ` of ${escapeHtml(product.name.toLowerCase())}` : ""}.` : `I compared ${offers.length} supplier listings for <strong>${escapeHtml(quantityLabel)}</strong>${product.name ? ` of ${escapeHtml(product.name.toLowerCase())}` : ""}.`}</div>
-      ${runStepsMarkup}
-      ${isDemo ? evidenceMarkup : ""}
-      ${sourceMarkup}
-      <div class="analysis-complete"><strong>Comparison complete</strong><span>${offers.length} offers ranked against the selected fields</span></div>
-      <div class="research-head">
-        <img class="research-thumb" src="${escapeHtml(product.image || "./assets/taskvault-mark.svg")}" alt="">
-        <div class="research-title">
-          <strong>${escapeHtml(product.name || "Sourcing comparison")}</strong>
-          <small>${escapeHtml(product.specs || research.quantity?.quantity_label || "")}</small>
-        </div>
-        <div class="research-meta">
-          <strong>${escapeHtml(index.version || "Current index")}</strong>
-          ${research.quantity?.quantity_note ? escapeHtml(research.quantity.quantity_note) : "Price includes listed shipping; tax excluded"}
-        </div>
+      <div class="response-topline">
+        <span class="response-state"><span class="response-state-mark" aria-hidden="true">${ICON.check}</span>${isDemo ? "Sample comparison" : "Comparison ready"}</span>
+        <span>${offers.length} offer${offers.length === 1 ? "" : "s"} · ${escapeHtml(durationLabel)} · evidence attached</span>
       </div>
-      ${bestOffer ? `<div class="research-recommendation"><span>${isDemo ? "Best in sample" : "Recommended"}</span><strong>${escapeHtml(bestOffer.supplier)} · ${bestPrice} landed · ${Number(bestOffer.lead_time_days || 0)} day lead. ${tradeoff}</strong></div>` : ""}
-      <div class="offer-list-heading"><h3>Supplier comparison · ${escapeHtml(product.name || "Offers")}</h3><span>${escapeHtml(product.specs || "Ranked by weighted match")}</span></div>
+      ${isDemo ? '<aside class="research-demo-note" role="note"><strong>Illustrative catalog</strong><span>Sample catalog records only · no catalog supplier page was opened. Do not use this for a real purchase.</span></aside>' : ""}
+      <p class="research-intro">I compared <strong>${offers.length} ${isDemo ? "sample " : ""}listings</strong> for <strong>${escapeHtml(quantityLabel)}</strong>${product.name ? ` of ${escapeHtml(product.name.toLowerCase())}` : ""}.</p>
+      ${renderLiveCaptures(research)}
+      ${bestOffer ? `
+        <section class="recommendation-spotlight" aria-label="Recommended supplier">
+          <div class="spotlight-heading">
+            <span class="spotlight-kicker">${isDemo ? "Best sample match" : "Recommended"}</span>
+            <span class="spotlight-score">Rank #${String(Number(bestOffer.rank || 1)).padStart(2, "0")} · ${offers.length} offers compared</span>
+          </div>
+          <div class="spotlight-main">
+            <div>
+              <h3>${escapeHtml(bestOffer.supplier)}</h3>
+              <p>${escapeHtml(product.name || bestOffer.product_name || "Supplier offer")} · ${escapeHtml(quantityLabel)}</p>
+            </div>
+            <div class="spotlight-price">
+              <strong>${money(bestOffer.landed_cost)}</strong>
+              <span>landed total · ${money(bestOffer.unit_price)}/${escapeHtml(bestOffer.unit || "unit")}</span>
+            </div>
+          </div>
+          <div class="spotlight-reason"><strong>Why it leads</strong> ${escapeHtml(spotlightReason)}</div>
+          <div class="spotlight-facts">
+            <span><small>Lead time</small><strong>${Number(bestOffer.lead_time_days || 0)} days</strong></span>
+            <span><small>Order minimum</small><strong>${escapeHtml(bestOffer.moq_label || `${Number(bestOffer.moq_units || 0)} units`)}</strong></span>
+            <span><small>Shipping</small><strong>${bestOffer.free_shipping ? "Included" : money(bestOffer.shipping)}</strong></span>
+            <span><small>Documentation</small><strong>${isDemo ? `${verifiedCount} of ${offers.length} sample flags` : `${verifiedCount} of ${offers.length} verified`}</strong></span>
+          </div>
+          <div class="spotlight-links">
+            <a class="evidence-link" href="${escapeHtml(apiUrl(bestOffer.source_url || "#"))}" target="_blank" rel="noreferrer noopener">Open evidence record${ICON.external}</a>
+            <span class="spotlight-freshness">${isDemo ? "Bundled sample record · not live" : `Captured ${escapeHtml(formatDate(bestOffer.captured_at || research.generated_at))}`}</span>
+          </div>
+          ${renderRankingTrace(bestOffer, rankingMethod)}
+        </section>` : ""}
+      <div class="offer-list-heading"><h3>Supplier comparison</h3><span>${offers.length} offers · ranked by weighted fit, lowest landed cost first</span></div>
       <div class="offer-list">${offers.map((offer) => renderOffer(offer, bestId, message.taskId, isDemo, rankingMethod)).join("")}</div>
-      ${!isDemo && summary ? `<details class="research-narrative"><summary>Agent's run summary</summary><p>${escapeHtml(summary)}</p></details>` : ""}
       <div class="research-actions">
         <button class="action-button primary" type="button" data-action="order" data-task="${escapeHtml(message.taskId || "")}" data-offer="${escapeHtml(bestOffer?.id || "")}">${ICON.order}Draft purchase order</button>
         <button class="action-button" type="button" data-action="quote" data-task="${escapeHtml(message.taskId || "")}" data-offer="${escapeHtml(bestOffer?.id || "")}">${ICON.quote}Draft quote</button>
         <button class="action-button" type="button" data-action="watch" data-task="${escapeHtml(message.taskId || "")}" data-offer="${escapeHtml(bestOffer?.id || "")}">${ICON.watch}Watch price</button>
       </div>
+      ${traceMarkup}
       ${renderReceipt(message.sandbox)}
     </div>`;
 }
-
 function renderOffer(offer, bestId, taskId, isDemo = false, rankingMethod = {}) {
   const isBest = offer.id === bestId;
   const badges = Array.isArray(offer.badges) ? offer.badges : [];
@@ -704,7 +829,7 @@ function syncAgentRun() {
   let activeStep = -1;
   if (loading) {
     const stage = String(loading.stage || "").toLowerCase();
-    activeStep = stage.includes("queued") || stage.includes("starting") ? 0 : stage.includes("comparison") ? 3 : 2;
+    activeStep = stage.includes("queued") || stage.includes("starting") ? 0 : stage.includes("captur") ? 1 : stage.includes("compar") || stage.includes("ready") ? 3 : 2;
     status.textContent = "Running";
     status.className = "agent-run-status is-running";
     caption.textContent = loading.stage || "Working through the bundled supplier catalog.";
@@ -713,6 +838,11 @@ function syncAgentRun() {
     status.textContent = "Complete";
     status.className = "agent-run-status is-complete";
     caption.textContent = "Evidence attached. Review the comparison before taking action.";
+  } else if (latestAssistant?.kind === "clarification") {
+    activeStep = 0;
+    status.textContent = "Needs detail";
+    status.className = "agent-run-status is-waiting";
+    caption.textContent = "Waiting for the order quantity before the comparison can start.";
   } else {
     status.textContent = "Ready";
     status.className = "agent-run-status";
@@ -822,11 +952,13 @@ async function sendPrompt(raw) {
   if (!text || state.busy) return false;
   const sources = state.sources.slice();
   const history = state.messages
-    .filter((message) => message.role === "user" || message.kind === "text" || message.kind === "research")
+    .filter((message) => message.role === "user" || ["text", "research", "clarification"].includes(message.kind))
     .slice(-12)
     .map((message) => ({
       role: message.role,
-      content: message.role === "user" ? message.text : message.kind === "research"
+      content: message.role === "user" ? message.text : message.kind === "clarification"
+        ? message.text || message.clarification?.prompt || ""
+        : message.kind === "research"
         ? JSON.stringify({
             summary: message.research?.summary,
             recommendation: message.research?.recommendation,
@@ -880,6 +1012,15 @@ async function sendPrompt(raw) {
       return true;
     }
     state.messages = state.messages.filter((message) => message !== loading);
+    if (data.clarification) {
+      state.messages.push({ role: "assistant", kind: "clarification", text: data.answer, clarification: data.clarification });
+      state.activeTaskId = null;
+      renderMessages();
+      finishBusy();
+      scrollToLastMessage();
+      openBriefDialog(data.clarification);
+      return true;
+    }
     state.messages.push({ role: "assistant", kind: "text", text: data.answer, links: data.sources || [] });
     state.activeTaskId = data.task_id || null;
     renderMessages();
@@ -990,6 +1131,8 @@ function newChat() {
   try { localStorage.setItem("taskvault-conversation-started", "false"); } catch { /* Storage can be disabled. */ }
   state.sources = [];
   state.activeTaskId = null;
+  state.brief = null;
+  closeModal("brief-dialog");
   $("#prompt").value = "";
   renderSources();
   renderMessages();
@@ -1288,6 +1431,10 @@ function describeActivityEvent(event, isDemo) {
     "research.queued": ["Sourcing started", quantity ? `Started a sourcing run for ${quantity}.` : "Started a sourcing run."],
     "task.updated": ["Run in progress", "The sourcing worker is preparing your comparison."],
     "sandbox.started": ["Comparison started", "Started the worker that prepares the supplier comparison."],
+    "browser.started": ["Live capture started", "Opened the buyer-provided pages read-only through an allowlist proxy."],
+    "browser.captured": ["Source pages captured", message || "Timestamped screenshots were saved as evidence."],
+    "browser.empty": ["No screenshots retained", "The source capture completed without a retained screenshot; errors are attached to the task."],
+    "browser.failed": ["Live capture unavailable", "The stored-field comparison completed, but buyer source pages were not opened."],
     "task.completed": ["Task completed", "The sourcing comparison is ready to review."],
     "task.failed": ["Task needs attention", "The request could not be completed. Review the task for details."],
     "task.stopped": ["Task stopped", "The sourcing run stopped before the comparison was completed."],
@@ -1296,13 +1443,13 @@ function describeActivityEvent(event, isDemo) {
     "sandbox.completed": [
       "Offers compared",
       isDemo
-        ? `Compared ${count || "the available"} offers from the bundled sample catalog. No supplier websites were visited.`
+        ? `Compared ${count || "the available"} offers from the bundled sample catalog. No catalog supplier pages were visited.`
         : `Compared ${count || "the available"} supplier offers and saved the results.`,
     ],
     "evidence.saved": [
       "Evidence attached",
       isDemo
-        ? `Linked ${count || "the available"} sample offer records to this comparison. These are not live supplier quotes.`
+        ? `Linked ${count || "the available"} sample offer records to this comparison. These are not live supplier quotes; buyer source captures are stored separately.`
         : `Saved source records for ${count || "the available"} supplier offers.`,
     ],
     "watch.created": ["Price watch added", message.replace(/^Price watch created for /i, "Added a price watch for ").replace(/\.$/, ".")],
@@ -1745,6 +1892,44 @@ function openSourceDialog() {
   openModal("source-dialog");
 }
 
+function openBriefDialog(clarification) {
+  const product = clarification?.product;
+  if (!product) return;
+  state.brief = clarification;
+  const productImage = $("#brief-image");
+  productImage.src = product.image || "./assets/taskvault-mark.svg";
+  productImage.alt = "";
+  $("#brief-product-name").textContent = product.name || "Sourcing request";
+  $("#brief-product-meta").textContent = [product.specs, product.unit].filter(Boolean).join(" · ");
+  $("#brief-question").textContent = `How many ${String(product.short_name || product.name || "units").toLowerCase()} do you need?`;
+  const units = Array.isArray(clarification.units) && clarification.units.length
+    ? clarification.units
+    : ["boxes", "cartons", "pieces"];
+  $("#brief-unit").innerHTML = units
+    .map((unit) => `<option value="${escapeHtml(unit)}">${escapeHtml(unit.charAt(0).toUpperCase() + unit.slice(1))}</option>`)
+    .join("");
+  $("#brief-quantity").value = "";
+  $("#brief-error").hidden = true;
+  $("#brief-hint").textContent = "TaskVault will calculate landed cost and check the supplier minimum for this exact quantity.";
+  openModal("brief-dialog");
+  requestAnimationFrame(() => $("#brief-quantity").focus());
+}
+
+async function submitBrief() {
+  if (!state.brief) return;
+  const quantity = Number($("#brief-quantity").value);
+  if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100000) {
+    $("#brief-error").hidden = false;
+    $("#brief-quantity").focus();
+    return;
+  }
+  const unit = $("#brief-unit").value || "boxes";
+  $("#brief-error").hidden = true;
+  closeModal("brief-dialog");
+  state.brief = null;
+  await sendPrompt(`${quantity} ${unit}`);
+}
+
 function openSidebar() {
   if (window.matchMedia("(max-width: 1180px)").matches && state.agentPanelOpen) {
     state.agentPanelOpen = false;
@@ -1943,6 +2128,11 @@ function handleAction(action, element) {
   if (action === "inference-check") return checkInferenceConnection();
   if (action === "refresh-connections") return renderConnectionsView();
   if (action === "copy") return copyText(element);
+  if (action === "clarify") {
+    const message = state.messages[Number(element.dataset.messageIndex)];
+    if (message?.clarification) openBriefDialog(message.clarification);
+    return;
+  }
   if (action === "review-latest") return scrollToLastMessage();
   if (action === "retry-view") return renderUtilityView(element.dataset.retryView);
   return undefined;
@@ -1970,6 +2160,13 @@ document.addEventListener("click", (event) => {
   const suggestion = event.target.closest("[data-prompt]");
   if (suggestion) {
     sendPrompt(suggestion.dataset.prompt);
+    return;
+  }
+  const briefPreset = event.target.closest("[data-brief-preset]");
+  if (briefPreset) {
+    $("#brief-quantity").value = briefPreset.dataset.briefPreset;
+    $("#brief-error").hidden = true;
+    $("#brief-quantity").focus();
     return;
   }
   const removeSource = event.target.closest("[data-remove-source]");
@@ -2010,6 +2207,11 @@ document.addEventListener("submit", (event) => {
   if (form.id === "order-form") {
     event.preventDefault();
     createOrder();
+    return;
+  }
+  if (form.id === "brief-form") {
+    event.preventDefault();
+    submitBrief();
     return;
   }
   if (form.id === "profile-form") {

@@ -1,0 +1,25 @@
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PORT=8000
+
+WORKDIR /app
+
+# Install standard dependencies if needed
+COPY requirements*.txt ./
+RUN if [ -f requirements.txt ]; then pip install --no-cache-dir -r requirements.txt; fi
+
+# Copy application files
+COPY . .
+
+# Run as non-root user
+RUN useradd -m -u 10001 opspilot && \
+    mkdir -p /app/data && \
+    chown -R opspilot:opspilot /app
+
+USER opspilot
+
+EXPOSE 8000
+
+CMD ["python", "server.py"]

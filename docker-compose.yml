@@ -1,0 +1,35 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      - TASKVAULT_PORT=8000
+      - TASKVAULT_HOST=0.0.0.0
+      - TASKVAULT_COMPETITION_TRACK=blast_radius_zero
+    volumes:
+      - opspilot-data:/app/data
+    restart: unless-stopped
+
+  browser-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.browser-worker
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1024M
+    network_mode: bridge
+    read_only: true
+    tmpfs:
+      - /home/worker/tmp:rw,noexec,nosuid,size=64m
+
+volumes:
+  opspilot-data:

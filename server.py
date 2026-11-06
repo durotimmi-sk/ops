@@ -37,6 +37,7 @@ from taskvault_core import (
     save_profile,
     save_conversation_message,
     save_research,
+    save_task_captures,
     stop_requested,
     task_result,
     update_task,
@@ -44,6 +45,7 @@ from taskvault_core import (
     validate_sources,
     verify_audit_ledger,
     check_price_watch,
+    database_path,
 )
 from taskvault_inference import (
     InferenceError,
@@ -63,8 +65,10 @@ from taskvault_research import (
     plural_unit,
     purchase_order_draft,
     quote_draft,
+    resolve_product,
+    run_live_research,
 )
-from taskvault_sandbox import containment_test, run_worker, sandbox_mode
+from taskvault_sandbox import containment_test, run_browser_capture, run_worker, sandbox_mode
 
 
 ROOT = Path(__file__).resolve().parent
@@ -107,6 +111,10 @@ def validated_history(value, current_message):
     return history[-MAX_HISTORY_MESSAGES:]
 
 
+def evidence_directory(task_id):
+    return database_path().parent / "evidence" / str(task_id)
+
+
 def start_research_task(task_id, message, sources, conversation_id=None):
     def run():
         try:
@@ -124,6 +132,73 @@ def start_research_task(task_id, message, sources, conversation_id=None):
                 if conversation_id:
                     save_conversation_message(conversation_id, "assistant", "text", {"text": "The sourcing run was stopped before its evidence was saved."}, task_id=task_id)
                 return
+            capture_summary = None
+            if sources:
+                update_task(task_id, "running", "Capturing source pages read-only")
+                append_event(task_id, "browser.started", "Read-only browser capture started for the buyer-provided source pages.")
+                try:
+                    captured, capture_receipt = run_browser_capture(
+                        sources,
+                        artifact_dir=evidence_directory(task_id),
+                        cancel_check=lambda: stop_requested(task_id),
+                    )
+                    captures = captured.get("captures") or []
+                    save_task_captures(
+                        task_id,
+                        captures,
+                        artifact_base_url="/evidence/{}".format(task_id),
+                    )
+                    for capture in captures:
+                        filename = capture.get("screenshot_file")
+                        if filename and re.fullmatch(r"[a-z0-9-]{1,40}\.png", filename):
+                            capture["screenshot_url"] = "/evidence/{}/{}".format(task_id, filename)
+                            capture["screenshot_file"] = None
+                    payload["captures"] = captures
+                    payload["browser"] = {
+                        "receipt": capture_receipt,
+                        "browser": captured.get("browser"),
+                        "blocked_proxy_requests": captured.get("blocked_proxy_requests") or [],
+                        "allowed_request_count": captured.get("allowed_request_count", 0),
+                        "screenshots_retained": captured.get("screenshots_retained", 0),
+                        "error": None,
+                    }
+                    capture_summary = captured.get("captured_count", 0)
+                    if capture_summary:
+                        append_event(
+                            task_id,
+                            "browser.captured",
+                            "{} source page(s) captured read-only with timestamped screenshots.".format(capture_summary),
+                        )
+                        try:
+                            live_payload = run_live_research(message, captured, sources=sources)
+                            live_payload["captures"] = payload.get("captures", [])
+                            live_payload["browser"] = payload.get("browser", {})
+                            payload = live_payload
+                            append_event(
+                                task_id,
+                                "research.live",
+                                "Capture-backed comparison generated from buyer source pages.",
+                            )
+                        except ValueError as error:
+                            LOG.info("Capture-backed comparison fallback for %s: %s", task_id, error)
+                            append_event(
+                                task_id,
+                                "research.fallback",
+                                "Capture-backed comparison unavailable; sample-index comparison retained.",
+                            )
+                    else:
+                        append_event(
+                            task_id,
+                            "browser.empty",
+                            "No source page screenshots were retained; capture errors are recorded on the task.",
+                        )
+                except InterruptedError:
+                    raise
+                except (RuntimeError, ValueError, OSError) as error:
+                    LOG.warning("Browser capture for %s failed: %s", task_id, error)
+                    payload["captures"] = []
+                    payload["browser"] = {"error": "Live source capture was unavailable for this run.", "detail": str(error)[:300]}
+                    append_event(task_id, "browser.failed", "Live source capture was unavailable; the stored-field comparison still completed.")
             payload["task_id"] = task_id
             narrative = narrative_for_research(payload)
             if narrative:
@@ -156,11 +231,15 @@ def start_research_task(task_id, message, sources, conversation_id=None):
                     receipt.get("mode", "unknown"), len(payload.get("offers", []))
                 ),
             )
+            captured_count = len([
+                capture for capture in payload.get("captures", [])
+                if capture.get("screenshot_url")
+            ])
             append_event(
                 task_id,
                 "evidence.saved",
-                "{} supplier offer records saved with local evidence links; external pages were not captured.".format(
-                    payload.get("evidence_count", 0)
+                "{} supplier offer records saved with local evidence links; {} buyer source page(s) captured live.".format(
+                    payload.get("evidence_count", 0), captured_count
                 ),
             )
         except InterruptedError as error:
@@ -385,6 +464,62 @@ class TaskVaultHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_evidence(self, task_id, filename):
+        if not get_task(task_id):
+            return self._send_error(404, "Evidence not found.", "not_found")
+        base = evidence_directory(task_id).resolve()
+        file_path = (base / filename).resolve()
+        if base not in file_path.parents:
+            return self._send_error(404, "Evidence not found.", "not_found")
+        try:
+            body = file_path.read_bytes()
+        except OSError:
+            return self._send_error(404, "Evidence not found.", "not_found")
+        self.send_response(200)
+        self.send_header("Content-Type", "image/png")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "private, max-age=3600")
+        self._security_headers()
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _stream_task_events(self, task_id):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "close")
+        self.send_header("X-Accel-Buffering", "no")
+        self._security_headers()
+        self.end_headers()
+        self.close_connection = True
+
+        last_id = 0
+        iterations = 0
+        while iterations < 60:
+            events = list_task_events(task_id, limit=500)
+            new_events = [e for e in events if e.get("id", 0) > last_id]
+            for event in new_events:
+                last_id = max(last_id, event.get("id", 0))
+                kind = event.get("kind", "message")
+                data = json.dumps(event, ensure_ascii=False)
+                payload = "event: {}\ndata: {}\n\n".format(kind, data)
+                try:
+                    self.wfile.write(payload.encode("utf-8"))
+                    self.wfile.flush()
+                except (BrokenPipeError, ConnectionResetError, OSError):
+                    return
+            task = get_task(task_id)
+            if not task or task.get("status") in ("completed", "failed", "stopped"):
+                final_data = json.dumps({"status": (task or {}).get("status", "unknown")})
+                try:
+                    self.wfile.write("event: task.completed\ndata: {}\n\n".format(final_data).encode("utf-8"))
+                    self.wfile.flush()
+                except OSError:
+                    pass
+                break
+            time.sleep(0.1)
+            iterations += 1
+
     def _source_page(self, offer_id):
         product, offer = catalog_offer(offer_id)
         if not offer:
@@ -470,6 +605,8 @@ th {{ width:38%; font-weight:500; color:#6e6e6e; }}
             return self._send_error(403, "This frontend origin is not allowed.", "origin_not_allowed")
         parsed = urllib.parse.urlsplit(self.path)
         route = parsed.path
+        if route.startswith("/api/v1/"):
+            route = "/api/" + route[len("/api/v1/"):]
         if route == "/api/auth/session":
             return self._send_json(200, {"auth_enabled": self._auth_enabled(), "authenticated": self._is_authenticated(), "username": "operator" if self._is_authenticated() and self._auth_enabled() else None})
         if route == "/api/health":
@@ -492,6 +629,8 @@ th {{ width:38%; font-weight:500; color:#6e6e6e; }}
         if route.startswith("/api/") and not self._require_auth():
             return
         if route.startswith("/sources/") and not self._require_auth():
+            return
+        if route.startswith("/evidence/") and not self._require_auth():
             return
         if route == "/api/tasks":
             return self._send_json(200, {"tasks": list_tasks()})
@@ -526,12 +665,49 @@ th {{ width:38%; font-weight:500; color:#6e6e6e; }}
             return self._send_json(200, result)
         match = re.fullmatch(r"/api/tasks/([0-9a-f-]+)/events", route)
         if match:
-            if not get_task(match.group(1)):
+            task_id = match.group(1)
+            if not get_task(task_id):
                 return self._send_error(404, "Task not found.", "not_found")
-            return self._send_json(200, {"events": list_task_events(match.group(1))})
+            accept = self.headers.get("Accept", "")
+            query = urllib.parse.parse_qs(parsed.query)
+            if "text/event-stream" in accept or "stream" in query:
+                return self._stream_task_events(task_id)
+            return self._send_json(200, {"events": list_task_events(task_id)})
+        match = re.fullmatch(r"/api/tasks/([0-9a-f-]+)/evidence", route)
+        if match:
+            task = get_task(match.group(1))
+            if not task:
+                return self._send_error(404, "Task not found.", "not_found")
+            res = task_result(task["id"]) or {}
+            research = res.get("research") or {}
+            return self._send_json(200, {
+                "task_id": task["id"],
+                "captures": res.get("captures", []),
+                "browser": research.get("browser", {}),
+                "evidence_count": len(res.get("captures", [])),
+                "offers": [
+                    {
+                        "id": offer.get("id"),
+                        "supplier": offer.get("supplier"),
+                        "source_url": offer.get("source_url"),
+                        "evidence": offer.get("evidence", {}),
+                    }
+                    for offer in research.get("offers", [])
+                ],
+            })
+        match = re.fullmatch(r"/api/tasks/([0-9a-f-]+)/captures", route)
+        if match:
+            task = get_task(match.group(1))
+            if not task:
+                return self._send_error(404, "Task not found.", "not_found")
+            captures = task_result(task["id"]).get("captures", [])
+            return self._send_json(200, {"captures": captures})
         match = re.fullmatch(r"/sources/([A-Za-z0-9_-]+)", route)
         if match:
             return self._source_page(match.group(1))
+        match = re.fullmatch(r"/evidence/([0-9a-f-]{36})/(source-[0-9]{2}\.png)", route)
+        if match:
+            return self._send_evidence(match.group(1), match.group(2))
         if route in ("/", "/index.html"):
             return self._send_file("index.html")
         if route in ("/app.js", "/styles.css", "/config.js"):
@@ -544,6 +720,8 @@ th {{ width:38%; font-weight:500; color:#6e6e6e; }}
         if not self._origin_allowed():
             return self._send_error(403, "This frontend origin is not allowed.", "origin_not_allowed")
         route = urllib.parse.urlsplit(self.path).path
+        if route.startswith("/api/v1/"):
+            route = "/api/" + route[len("/api/v1/"):]
         if route == "/api/auth/login":
             return self._login()
         if route == "/api/auth/logout":
@@ -551,6 +729,8 @@ th {{ width:38%; font-weight:500; color:#6e6e6e; }}
         if route.startswith("/api/") and not self._require_auth():
             return
         try:
+            if route == "/api/tasks":
+                return self._create_task_endpoint()
             if route == "/api/chat":
                 return self._chat()
             if route == "/api/voice/ask":
@@ -611,6 +791,48 @@ th {{ width:38%; font-weight:500; color:#6e6e6e; }}
         self._cors_headers()
         self.end_headers()
 
+    def _create_task_endpoint(self):
+        payload = self._read_json()
+        goal = str(payload.get("goal") or payload.get("message") or "").strip()
+        if not goal:
+            raise ValueError("Provide a goal or message for the task.")
+        raw_sources = payload.get("sources") or payload.get("urls") or []
+        sources = validate_sources(raw_sources)
+        research_query = goal
+        product = resolve_product(research_query)
+        if product and not has_explicit_quantity(research_query):
+            order_unit = str(product.get("unit", "box")).lower()
+            base_unit = "cases" if order_unit.startswith("case") else "boxes"
+            prompt = "Specify an order quantity, e.g. 500 {}.".format(base_unit)
+            return self._send_json(200, {
+                "clarification": {
+                    "kind": "quantity",
+                    "prompt": prompt,
+                    "product": product,
+                }
+            })
+        quantity_units = 1
+        if product and has_explicit_quantity(research_query):
+            quantity_units = extract_quantity(research_query, product)["requested_units"]
+        task_id = create_task(
+            research_query,
+            sources,
+            status="running",
+            stage="Queued for execution",
+            intent="research" if product else "general",
+            product_key=product["key"] if product else None,
+            quantity=quantity_units,
+        )
+        append_event(task_id, "task.created", "Task created via API.")
+        if product:
+            start_research_task(task_id, research_query, sources)
+        return self._send_json(201, {
+            "task_id": task_id,
+            "status": "running",
+            "events_url": "/api/tasks/{}/events".format(task_id),
+            "result_url": "/api/tasks/{}/result".format(task_id),
+        })
+
     def _chat(self):
         payload = self._read_json()
         message = validate_prompt(payload.get("message"))
@@ -618,23 +840,45 @@ th {{ width:38%; font-weight:500; color:#6e6e6e; }}
         history = validated_history(payload.get("history", []), message)
         conversation_id = create_conversation(payload.get("conversation_id"))
         research_query = message
-        product = match_product(research_query)
+        product = resolve_product(research_query)
         if not product and has_explicit_quantity(message):
             for prior in reversed(history[:-1]):
                 if prior.get("role") == "user" and is_research_request(prior.get("content", "")):
-                    product = match_product(prior["content"])
+                    product = resolve_product(prior["content"])
                     if product:
                         research_query = "{} {}".format(prior["content"], message)
                         break
         if is_research_request(research_query):
-            product = match_product(research_query)
+            product = resolve_product(research_query)
             if not has_explicit_quantity(research_query):
-                prompt = "How many {} do you need? Include the order unit, such as 500 boxes or 2 cartons, and I’ll compare offers for that exact quantity.".format(
-                    product.get("short_name", product["name"]).lower()
+                order_unit = str(product.get("unit", "box")).lower()
+                base_unit = "cases" if order_unit.startswith("case") else "boxes"
+                example = "100 cases" if base_unit == "cases" else "500 boxes"
+                prompt = "How many {} do you need? Include the order unit, such as {} or 2 cartons, and I’ll compare offers for that exact quantity.".format(
+                    product.get("short_name", product["name"]).lower(),
+                    example,
                 )
+                clarification = {
+                    "kind": "quantity",
+                    "prompt": prompt,
+                    "product": {
+                        "key": product["key"],
+                        "name": product["name"],
+                        "short_name": product.get("short_name", product["name"]),
+                        "specs": product.get("specs", ""),
+                        "image": product.get("image", ""),
+                        "unit": product.get("unit", "unit"),
+                        "pack_size": product.get("pack_size", 1),
+                        "carton_size": product.get("carton_size", 1),
+                    },
+                    "units": [base_unit, "cartons", "pieces"],
+                }
                 save_conversation_message(conversation_id, "user", "text", {"text": message, "sources": sources})
                 save_conversation_message(conversation_id, "assistant", "text", {"text": prompt})
-                return self._send_json(200, {"answer": prompt, "conversation_id": conversation_id})
+                return self._send_json(
+                    200,
+                    {"answer": prompt, "conversation_id": conversation_id, "clarification": clarification},
+                )
             quantity = extract_quantity(research_query, product)
             task_id = create_task(
                 research_query,

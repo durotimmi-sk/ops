@@ -6,6 +6,7 @@ from taskvault_research import (
     match_product,
     purchase_order_draft,
     quote_draft,
+    run_live_research,
     run_research,
 )
 
@@ -40,6 +41,38 @@ class ResearchEngineTests(unittest.TestCase):
         self.assertIn("No message was sent", result["summary"])
         self.assertIn("nothing was paid", result["summary"])
         self.assertGreaterEqual(result["verified_count"], 1)
+
+    def test_live_capture_research_uses_extracted_fields_without_invented_ratings(self):
+        payload = run_live_research(
+            "Source 500 boxes of nitrile examination gloves.",
+            {
+                "captures": [
+                    {
+                        "url": "https://example.com/item",
+                        "final_url": "https://example.com/item",
+                        "host": "example.com",
+                        "title": "Example Medical - Nitrile Gloves",
+                        "captured_at": "2026-11-06T12:00:00+00:00",
+                        "text_excerpt": "Price USD 8.10 per box. MOQ 100. Dispatch in 4 days.",
+                        "screenshot_file": "source-01.png",
+                        "screenshot_sha256": "a" * 64,
+                        "text_sha256": "b" * 64,
+                        "blocked_requests": 0,
+                        "error": None,
+                    }
+                ],
+                "captured_count": 1,
+                "requested_count": 1,
+                "error_count": 0,
+                "blocked_requests": [],
+            },
+            sources=["https://example.com/item"],
+        )
+        self.assertEqual(payload["index"]["version"], "live-capture-v1")
+        self.assertEqual(payload["offers"][0]["verification_status"], "captured_unverified")
+        self.assertEqual(payload["offers"][0]["rating"], 0)
+        self.assertTrue(payload["offers"][0]["price_known"])
+        self.assertIn("No message was sent", payload["summary"])
 
     def test_quote_and_order_drafts_never_claim_external_action(self):
         result = run_research("Source 500 boxes of nitrile gloves.")

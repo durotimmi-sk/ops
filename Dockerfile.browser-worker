@@ -1,0 +1,20 @@
+FROM mcr.microsoft.com/playwright/python:v1.47.0-jammy
+
+# Create non-root worker user
+RUN useradd -m -u 10001 worker
+WORKDIR /home/worker/app
+
+RUN pip install --no-cache-dir playwright==1.47.0
+
+COPY browser_worker.py taskvault_egress.py ./
+RUN mkdir -p /home/worker/tmp /home/worker/artifacts && chown -R worker:worker /home/worker
+
+USER worker
+
+# Runtime hardening: no write bytecode, unbuffered, task-scoped temp
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+    TMPDIR=/home/worker/tmp
+
+ENTRYPOINT ["python", "-B", "/home/worker/app/browser_worker.py"]
