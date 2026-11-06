@@ -1,0 +1,70 @@
+- generic [active] [ref=f3e1]:
+  - generic [ref=f3e2]:
+    - complementary "TaskVault workspace" [ref=f3e3]:
+      - generic [ref=f3e4]:
+        - link "TaskVault home" [ref=f3e5] [cursor=pointer]:
+          - /url: /
+          - generic [ref=f3e9]: taskvault.
+        - button "Collapse navigation" [ref=f3e10] [cursor=pointer]
+      - button "New research ⌘ K" [ref=f3e13] [cursor=pointer]:
+        - generic [ref=f3e16]: New research
+        - generic [ref=f3e17]: ⌘ K
+      - generic [ref=f3e18]: WORKSPACE
+      - navigation "Workspace navigation" [ref=f3e19]:
+        - button "Research tasks 0" [ref=f3e20] [cursor=pointer]:
+          - generic [ref=f3e23]: Research tasks
+          - generic [ref=f3e24]: "0"
+        - button "Run activity" [ref=f3e25] [cursor=pointer]
+      - region [ref=f3e29]:
+        - generic [ref=f3e30]:
+          - heading "RECENT RESEARCH" [level=2] [ref=f3e31]
+          - button "Refresh research tasks" [ref=f3e32] [cursor=pointer]
+        - group "Filter research tasks" [ref=f3e35]:
+          - button "All" [pressed] [ref=f3e36] [cursor=pointer]
+          - button "Running" [ref=f3e37] [cursor=pointer]
+          - button "Ready" [ref=f3e38] [cursor=pointer]
+        - generic [ref=f3e39]: Your research runs will appear here.
+      - generic [ref=f3e44]:
+        - button "Check research service status" [ref=f3e45] [cursor=pointer]:
+          - generic [ref=f3e47]:
+            - strong [ref=f3e48]: Setup required
+            - generic [ref=f3e49]: Open service status
+        - generic [ref=f3e52]: External actions stay off until approved.
+    - main [ref=f3e56]:
+      - generic [ref=f3e57]:
+        - generic [ref=f3e58]:
+          - generic [ref=f3e59]: Sourcing workspace
+          - generic [ref=f3e62]: New research
+        - generic [ref=f3e63]:
+          - generic [ref=f3e64]: Isolated browsing
+          - button "About TaskVault" [ref=f3e68] [cursor=pointer]: "?"
+      - region [ref=f3e70]:
+        - paragraph [ref=f3e80]: TASKVAULT SOURCING DESK
+        - heading [level=1] [ref=f3e82]:
+          - text: Research with
+          - emphasis [ref=f3e83]: receipts.
+        - paragraph [ref=f3e84]: Tell the research agent what you need. It visits public supplier pages in an isolated browser, then shows you what it found and where it came from.
+        - generic "Example research requests" [ref=f3e85]:
+          - button "Find a product Compare suppliers and pack sizes" [ref=f3e86] [cursor=pointer]:
+            - generic [ref=f3e90]:
+              - strong [ref=f3e91]: Find a product
+              - generic [ref=f3e92]: Compare suppliers and pack sizes
+          - button "Compare listings See differences with source links" [ref=f3e95] [cursor=pointer]:
+            - generic [ref=f3e99]:
+              - strong [ref=f3e100]: Compare listings
+              - generic [ref=f3e101]: See differences with source links
+        - paragraph [ref=f3e104]: No supplier messages, orders, or payments are sent.
+      - generic [ref=f3e107]:
+        - generic [ref=f3e108]:
+          - generic [ref=f3e109]: Describe what you want the agent to research
+          - textbox "Describe what you want the agent to research" [ref=f3e110]:
+            - /placeholder: Describe what you want to source...
+          - generic [ref=f3e111]:
+            - generic [ref=f3e112]:
+              - button "Add supplier page" [ref=f3e113] [cursor=pointer]
+              - generic [ref=f3e118]: Public-page research
+            - generic [ref=f3e120]:
+              - generic [ref=f3e121]: 0 / 500
+              - button "Start research" [ref=f3e122] [cursor=pointer]
+        - paragraph [ref=f3e125]: Research can be incomplete. Verify important terms with the supplier before purchase.
+  - status

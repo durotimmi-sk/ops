@@ -1,0 +1,22 @@
+[Unit]
+Description=OpsPilot procurement assistant
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=opspilot
+Group=opspilot
+WorkingDirectory=/opt/opspilot
+EnvironmentFile=/etc/opspilot/opspilot.env
+ExecStart=/opt/opspilot/.venv/bin/python /opt/opspilot/server.py
+Restart=on-failure
+RestartSec=3
+UMask=0077
+NoNewPrivileges=true
+MemoryMax=768M
+CPUQuota=100%
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target

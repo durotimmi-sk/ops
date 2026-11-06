@@ -1,0 +1,8 @@
+{
+  "name": "taskvault-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "build": "node deploy/build-frontend.mjs"
+  }
+}

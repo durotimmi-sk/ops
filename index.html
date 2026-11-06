@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#efefed">
+  <meta name="description" content="TaskVault — evidence-backed procurement work with controlled execution and human approval.">
+  <title>TaskVault</title>
+  <link rel="icon" href="./assets/favicon.svg?v=20261106" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./config.js" defer></script>
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell" id="app-shell" inert>
+    <aside class="sidebar" id="sidebar" aria-label="TaskVault navigation">
+      <div class="sidebar-head">
+        <a class="brand" href="./" data-view-link="assistant" aria-label="TaskVault home">
+          <img class="brand-mark" src="./assets/taskvault-mark.svg" alt="" width="27" height="27" loading="eager" decoding="async">
+          <span>TaskVault</span>
+        </a>
+        <button class="icon-button sidebar-close" id="sidebar-close" type="button" aria-label="Close navigation">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+
+      <button class="new-chat" id="new-chat" type="button" aria-label="Start new research" title="New research">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        <span>New research</span>
+        <kbd>⌘K</kbd>
+      </button>
+
+      <nav class="sidebar-nav" aria-label="Workspace">
+        <button class="nav-item is-active" data-view="assistant" type="button" aria-current="page" aria-label="Assistant" title="Assistant">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5h-6l-4.8 4v-4h-.2A2.5 2.5 0 0 1 4 13.5v-8Z"/></svg>
+          <span>Assistant</span>
+        </button>
+        <button class="nav-item" data-view="tasks" type="button" aria-label="Research tasks" title="Research tasks">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9h8M8 13h8M8 17h4"/></svg>
+          <span>Research tasks</span>
+          <span class="nav-count" id="task-count">0</span>
+        </button>
+        <button class="nav-item" data-view="watches" type="button" aria-label="Price watch" title="Price watch">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18V6M4 18h16"/><path d="m7 14 4-4 3 2 5-6"/></svg>
+          <span>Price watch</span>
+          <span class="nav-count" id="watch-count" hidden>0</span>
+        </button>
+        <button class="nav-item" data-view="approvals" type="button" aria-label="Approvals" title="Approvals">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="m8.5 12 2.2 2.2 4.8-4.8"/></svg>
+          <span>Approvals</span>
+          <span class="nav-count" id="approval-count" hidden>0</span>
+        </button>
+        <button class="nav-item" data-view="activity" type="button" aria-label="Activity" title="Activity">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14M5 10h14M5 15h9M5 20h9"/><circle cx="18" cy="17" r="2.5"/></svg>
+          <span>Activity</span>
+        </button>
+        <button class="nav-item" data-view="connections" type="button" aria-label="Connections" title="Connections">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/><rect x="4" y="7" width="16" height="13" rx="3"/><path d="M9 12h6m-3 0v3"/></svg>
+          <span>Connections</span>
+        </button>
+      </nav>
+
+      <div class="recent-block">
+        <div class="recent-head">
+          <span>Recent</span>
+          <button class="icon-button tiny" id="clear-recent" type="button" aria-label="Clear recent research" title="Clear recent research">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg>
+          </button>
+        </div>
+        <div class="recent-list" id="recent-list"></div>
+        <p class="recent-empty" id="recent-empty">Your sourcing threads will appear here.</p>
+      </div>
+
+      <div class="sidebar-foot">
+        <div class="sandbox-state" id="sandbox-state" title="Sandbox status">
+          <span class="sandbox-copy">
+            <strong id="sandbox-label">Checking backend</strong>
+            <small id="sandbox-detail">Sandbox status</small>
+          </span>
+        </div>
+        <button class="profile-button" id="profile-button" data-view="connections" type="button" aria-label="Open buyer profile" title="Buyer profile">
+          <img class="profile-avatar" src="./assets/taskvault-mascot.png" alt="" width="28" height="28" loading="eager" decoding="async">
+          <span class="profile-copy">
+            <strong id="profile-name">Your workspace</strong>
+            <small id="profile-company">Buyer profile</small>
+          </span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></svg>
+        </button>
+      </div>
+    </aside>
+
+    <div class="mobile-scrim" id="mobile-scrim" hidden></div>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="icon-button sidebar-panel-toggle" id="sidebar-panel-toggle" type="button" aria-label="Collapse navigation" aria-controls="sidebar" aria-expanded="true" title="Collapse navigation">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM9 5v14m3-10h5m-5 4h5"/></svg>
+          </button>
+          <button class="icon-button mobile-menu" id="menu-toggle" type="button" aria-label="Open navigation">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </button>
+          <div class="breadcrumbs">
+            <span class="crumb-root">TaskVault</span>
+            <span class="crumb-sep">/</span>
+            <strong id="topbar-title">Assistant</strong>
+          </div>
+        </div>
+        <div class="topbar-right">
+          <button class="help-button" id="help-button" type="button">How it works</button>
+          <button class="signout-button" id="signout-button" type="button" hidden>Sign out</button>
+          <button class="icon-button agent-panel-toggle" id="agent-panel-toggle" type="button" aria-label="Collapse procurement panel" aria-controls="agent-panel" aria-expanded="true" title="Collapse procurement panel">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v14M15 8l-3 4 3 4"/></svg>
+          </button>
+          <button class="avatar-button" id="topbar-profile" type="button" aria-label="Open workspace settings">
+            <img src="./assets/taskvault-mascot.png" alt="" width="26" height="26" loading="eager" decoding="async">
+          </button>
+        </div>
+      </header>
+
+      <section class="view assistant-view" id="view-assistant" aria-label="Sourcing assistant">
+        <div class="chat-scroll" id="chat-scroll">
+          <div class="chat-inner">
+            <div class="welcome" id="welcome">
+              <img class="welcome-mark" src="./assets/taskvault-mascot.png" alt="" width="64" height="64" loading="eager" decoding="async">
+              <h1>What are we sourcing?</h1>
+              <p class="welcome-copy">Supplier research with evidence attached, isolated execution, and a human decision before anything leaves the workspace.</p>
+              <div class="suggestions" id="suggestions">
+                <button class="suggestion" type="button" data-prompt="Source 500 boxes of powder-free nitrile examination gloves, size M. Compare landed cost and delivery time for my saved delivery destination.">
+                  <span class="suggestion-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10l2 4v11H5V8l2-4Z"/><path d="M8 4v4m8-4v4M5 9h14m-9 4h4"/></svg></span>
+                  <span class="suggestion-copy"><strong>Source nitrile gloves</strong><small>500 boxes · landed cost</small></span>
+                  <svg class="suggestion-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M7 7h10v10"/></svg>
+                </button>
+                <button class="suggestion" type="button" data-prompt="Find the lowest landed cost for 240 boxes of latex examination gloves, size M. Include minimum order and lead time.">
+                  <span class="suggestion-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18V6M4 18h16"/><path d="m7 14 4-4 3 2 5-6"/></svg></span>
+                  <span class="suggestion-copy"><strong>Compare latex gloves</strong><small>240 boxes · best value</small></span>
+                  <svg class="suggestion-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M7 7h10v10"/></svg>
+                </button>
+                <button class="suggestion" type="button" data-prompt="Compare suppliers for 5,000 doses of 5 mL syringes. Prioritize a five-day lead time and verified documentation.">
+                  <span class="suggestion-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m18 5-3 3m-2-2 4 4M9 9l6 6M5 19l4-4m-1-5 6 6"/><path d="M14 4h6v6"/></svg></span>
+                  <span class="suggestion-copy"><strong>Source syringes</strong><small>5,000 doses · speed</small></span>
+                  <svg class="suggestion-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M7 7h10v10"/></svg>
+                </button>
+                <button class="suggestion" type="button" data-prompt="Source 300 boxes of Type IIR surgical masks and separate verified suppliers from listing-only suppliers.">
+                  <span class="suggestion-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12c3-4 6-6 9-6s6 2 9 6c-3 4-6 6-9 6s-6-2-9-6Z"/><path d="M8 12h8m-4-3v6"/></svg></span>
+                  <span class="suggestion-copy"><strong>Source masks</strong><small>300 boxes · verified only</small></span>
+                  <svg class="suggestion-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M7 7h10v10"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="messages" id="messages" aria-live="polite"></div>
+          </div>
+        </div>
+
+        <div class="composer-wrap">
+          <div class="composer-inner">
+            <div class="source-chips" id="source-chips" hidden></div>
+            <form class="composer" id="composer">
+              <label class="sr-only" for="prompt">Message TaskVault</label>
+              <textarea id="prompt" rows="1" maxlength="4000" placeholder="Ask TaskVault to source something…" required></textarea>
+              <div class="composer-bar">
+                <div class="composer-actions">
+                  <button class="icon-button" id="attach-button" type="button" aria-label="Add supplier links" title="Add supplier links">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13.5 17.5 6a3.18 3.18 0 0 1 4.5 4.5l-9.2 9.2a5 5 0 0 1-7.1-7.1l9.2-9.2"/></svg>
+                  </button>
+                  <button class="icon-button" id="voice-button" type="button" aria-label="Start voice session" title="Start voice session">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3m-3 0h6"/></svg>
+                  </button>
+                  <span class="composer-note">Evidence stays attached</span>
+                </div>
+                <button class="send-button" id="send-button" type="submit" aria-label="Send message" disabled>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg>
+                </button>
+              </div>
+            </form>
+            <p class="disclaimer">TaskVault can make mistakes. Verify supplier evidence before ordering. No order, message, or payment is sent automatically.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="view utility-view" id="view-utility" aria-label="Workspace" hidden>
+        <div class="utility-head">
+          <div>
+            <p class="kicker" id="utility-kicker">Workspace</p>
+            <h1 id="utility-title">Research tasks</h1>
+            <p id="utility-description">Your sourcing work, kept together.</p>
+          </div>
+          <button class="primary-button" id="utility-action" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            <span>Start research</span>
+          </button>
+        </div>
+        <div class="utility-content" id="utility-content"></div>
+      </section>
+    </main>
+    <aside class="agent-panel" id="agent-panel" aria-label="Procurement agent task panel">
+      <section class="agent-intro">
+        <div class="agent-identity">
+          <div class="agent-mascot-wrap"><img src="./assets/taskvault-mascot.png" alt="" width="48" height="48" loading="eager" decoding="async"></div>
+          <div class="agent-copy"><strong>TaskVault</strong><span>Procurement operations agent</span></div>
+          <button class="icon-button agent-panel-close" id="agent-panel-close" type="button" aria-label="Close procurement panel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+        </div>
+        <p>Compare suppliers from the stored catalog, review evidence, and prepare next steps under buyer control.</p>
+        <div class="agent-shortcuts" aria-label="Procurement areas">
+          <button type="button" data-view="tasks">Research</button>
+          <button type="button" data-view="watches">Price watch</button>
+          <button type="button" data-view="approvals">Approvals</button>
+        </div>
+      </section>
+      <section class="agent-run" aria-labelledby="agent-run-title" aria-live="polite">
+        <div class="agent-run-head"><h2 id="agent-run-title">Task run</h2><span class="agent-run-status" id="agent-run-status">Ready</span></div>
+        <p class="agent-run-caption" id="agent-run-caption">Start a request to see its progress here.</p>
+        <ol class="agent-steps" id="agent-steps">
+          <li><span class="agent-step-dot"></span><span><strong>Understand request</strong><small>Product and quantity</small></span></li>
+          <li><span class="agent-step-dot"></span><span><strong>Match catalog</strong><small>Bundled supplier offers</small></span></li>
+          <li><span class="agent-step-dot"></span><span><strong>Compare offers</strong><small>Cost, MOQ, and delivery</small></span></li>
+          <li><span class="agent-step-dot"></span><span><strong>Prepare recommendation</strong><small>Evidence stays attached</small></span></li>
+        </ol>
+      </section>
+      <section class="agent-decision" id="agent-decision" aria-label="Current comparison snapshot" hidden>
+        <div class="agent-decision-head"><h2>Decision snapshot</h2><span class="agent-decision-kind" id="agent-decision-kind">Current comparison</span></div>
+        <p class="agent-decision-product" id="agent-decision-product"></p>
+        <div id="agent-decision-content"></div>
+        <button class="agent-decision-action" type="button" data-action="review-latest">Review comparison</button>
+      </section>
+      <section class="agent-watch" aria-label="Price watch information">
+        <div class="agent-watch-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 18V6M4 18h16"/><path d="m7 14 4-4 3 2 5-6"/></svg></div>
+        <div><strong>Price watch</strong><p>Watches check stored evidence when you open them. No automatic alerts are sent.</p><button type="button" data-view="watches">View watches <span aria-hidden="true">↗</span></button></div>
+      </section>
+    </aside>
+    <button class="agent-panel-scrim" id="agent-panel-scrim" type="button" aria-label="Close procurement panel" tabindex="-1"></button>
+  </div>
+
+  <div class="signin-layer" id="signin-layer" hidden>
+    <section class="signin-card" role="dialog" aria-modal="true" aria-labelledby="signin-title" aria-describedby="signin-copy">
+      <div class="signin-brand">
+        <img src="./assets/taskvault-mark.svg" alt="" width="30" height="30">
+        <span>TaskVault</span>
+      </div>
+      <p class="signin-kicker">Private procurement workspace</p>
+      <h1 id="signin-title">Welcome back</h1>
+      <p class="signin-copy" id="signin-copy">Sign in to review sourcing work, supplier evidence, and approvals.</p>
+      <form id="signin-form" autocomplete="on">
+        <label for="signin-username">Username</label>
+        <input id="signin-username" name="username" type="text" value="operator" autocomplete="username" required>
+        <label for="signin-password">Password</label>
+        <input id="signin-password" name="password" type="password" autocomplete="current-password" required>
+        <p class="signin-error" id="signin-error" role="alert" hidden></p>
+        <button class="signin-submit" id="signin-submit" type="submit"><span>Sign in</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></button>
+      </form>
+      <p class="signin-footnote">Only you can access this workspace.</p>
+    </section>
+  </div>
+
+  <dialog class="modal" id="source-dialog" aria-labelledby="source-title">
+    <div class="modal-head">
+      <div><p class="kicker">Source input</p><h2 id="source-title">Add supplier links</h2></div>
+      <button class="icon-button" type="button" data-close-dialog aria-label="Close">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <form id="source-form">
+      <label for="source-input">Public product or supplier pages</label>
+      <textarea id="source-input" rows="4" placeholder="https://supplier.example/product-a&#10;https://another.example/item-42"></textarea>
+      <p class="field-help">One URL per line. Local, private, and credential-bearing URLs are rejected before a task is created.</p>
+      <p class="field-error" id="source-error" role="alert" hidden>Enter public http or https URLs without embedded credentials or local/private hosts.</p>
+      <div class="modal-actions">
+        <button class="quiet-button" type="button" data-close-dialog>Cancel</button>
+        <button class="primary-button" type="submit">Add links</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="modal" id="watch-dialog" aria-labelledby="watch-title">
+    <div class="modal-head">
+      <div><p class="kicker">Price watch</p><h2 id="watch-title">Watch a supplier</h2></div>
+      <button class="icon-button" type="button" data-close-dialog aria-label="Close">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <form id="watch-form">
+      <p class="modal-lede" id="watch-lede">Track the unit price and flag the target.</p>
+      <label for="watch-target">Target unit price (USD)</label>
+      <input id="watch-target" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="7.50" required>
+      <p class="field-help">The watch checks the stored evidence record. It does not scrape the live web or purchase anything.</p>
+      <div class="modal-actions">
+        <button class="quiet-button" type="button" data-close-dialog>Cancel</button>
+        <button class="primary-button" type="submit">Create watch</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="modal" id="order-dialog" aria-labelledby="order-title">
+    <div class="modal-head">
+      <div><p class="kicker">Purchase order</p><h2 id="order-title">Prepare a draft order</h2></div>
+      <button class="icon-button" type="button" data-close-dialog aria-label="Close">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <form id="order-form">
+      <p class="modal-lede" id="order-lede">Choose the quantity. TaskVault calculates totals on the server and creates a draft only.</p>
+      <label for="order-quantity">Quantity</label>
+      <input id="order-quantity" type="number" min="1" max="100000" step="1" inputmode="numeric" required>
+      <p class="field-help">The supplier minimum order is applied automatically. No order is submitted to the supplier.</p>
+      <div class="modal-actions">
+        <button class="quiet-button" type="button" data-close-dialog>Cancel</button>
+        <button class="primary-button" type="submit">Create draft</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="modal" id="draft-dialog" aria-labelledby="draft-title">
+    <div class="modal-head">
+      <div><p class="kicker" id="draft-kicker">Human review</p><h2 id="draft-title">Draft for approval</h2></div>
+      <button class="icon-button" type="button" data-close-dialog aria-label="Close">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <div id="draft-content"></div>
+    <div class="modal-actions">
+      <button class="quiet-button" type="button" data-close-dialog>Close</button>
+      <button class="primary-button" id="approve-draft" type="button">Approve draft</button>
+    </div>
+  </dialog>
+
+  <dialog class="modal modal-small" id="notice-dialog" aria-labelledby="notice-title">
+    <div class="notice-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5m0 3.5h.01"/></svg>
+    </div>
+    <h2 id="notice-title">Something needs attention</h2>
+    <p id="notice-body"></p>
+    <div class="modal-actions">
+      <button class="primary-button" id="notice-action" type="button">Got it</button>
+    </div>
+  </dialog>
+
+  <div class="voice-overlay" id="voice-overlay" hidden>
+    <div class="voice-top">
+      <span class="voice-brand"><img src="./assets/taskvault-mark.svg" alt="">TaskVault voice</span>
+      <button class="voice-close" id="voice-close" type="button" aria-label="End voice session">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <div class="voice-stage">
+      <div class="voice-rings" aria-hidden="true"><span></span><span></span><span></span></div>
+      <img class="voice-avatar" src="./assets/taskvault-mascot.png" alt="" width="132" height="132" loading="eager" decoding="async">
+    </div>
+    <p class="voice-state" id="voice-state">Connecting…</p>
+    <p class="voice-transcript" id="voice-transcript">Ask about the suppliers, landed cost, lead time, or minimum order.</p>
+    <p class="voice-answer" id="voice-answer" hidden></p>
+    <div class="voice-links" id="voice-links"></div>
+    <div class="voice-actions">
+      <button class="voice-mic" id="voice-mic" type="button" aria-label="Start listening">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3m-3 0h6"/></svg>
+      </button>
+      <button class="voice-end" id="voice-end" type="button">End session</button>
+    </div>
+    <p class="voice-note">Voice uses your browser's speech services. TaskVault can work on sourcing requests and answer follow-ups while this session stays open.</p>
+  </div>
+
+  <input class="sr-only" id="hidden-file" type="file" tabindex="-1" aria-hidden="true">
+</body>
+</html>

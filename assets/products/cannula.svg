@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" role="img" aria-label="Box of 22 gauge IV cannulas">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f7f8f5"/>
+      <stop offset="0.55" stop-color="#eef1eb"/>
+      <stop offset="1" stop-color="#dfe5db"/>
+    </linearGradient>
+    <linearGradient id="box" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f5faf5"/>
+      <stop offset="0.55" stop-color="#dfeee2"/>
+      <stop offset="1" stop-color="#c4ddca"/>
+    </linearGradient>
+    <linearGradient id="side" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#a2bfa8"/>
+      <stop offset="1" stop-color="#c8ded0"/>
+    </linearGradient>
+    <linearGradient id="green" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4f8b63"/>
+      <stop offset="1" stop-color="#2b6744"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="180%">
+      <feColorMatrix type="matrix" values="0 0 0 0 0.06 0 0 0 0 0.1 0 0 0 0 0.07 0 0 0 0.2 0"/>
+      <feGaussianBlur stdDeviation="15"/>
+    </filter>
+  </defs>
+  <rect width="800" height="600" fill="url(#bg)"/>
+  <circle cx="650" cy="110" r="170" fill="#ffffff" opacity="0.65"/>
+  <circle cx="100" cy="520" r="210" fill="#ffffff" opacity="0.4"/>
+  <ellipse cx="405" cy="484" rx="250" ry="44" fill="#111111" opacity="0.14" filter="url(#shadow)"/>
+
+  <g transform="rotate(2 400 330)">
+    <path d="M200 195h390l36 44v196l-48 48H200z" fill="url(#side)"/>
+    <rect x="172" y="166" width="428" height="252" rx="16" fill="url(#box)"/>
+    <rect x="172" y="166" width="428" height="252" rx="16" fill="#ffffff" opacity="0.25"/>
+    <path d="M172 190h428" stroke="#ffffff" stroke-width="2" opacity="0.65"/>
+
+    <text x="208" y="222" fill="#3e6d4f" font-family="Helvetica, Arial, sans-serif" font-size="20" font-weight="700" letter-spacing="5">VITALCARE</text>
+    <text x="208" y="296" fill="#193c29" font-family="Helvetica, Arial, sans-serif" font-size="60" font-weight="700" letter-spacing="-2">CANNULA</text>
+    <text x="210" y="330" fill="#47705a" font-family="Helvetica, Arial, sans-serif" font-size="21" font-weight="500" letter-spacing="2">22G IV · INJECTION PORT</text>
+
+    <g transform="translate(438 230) rotate(20)">
+      <path d="M0 42h132" stroke="#b8c9bd" stroke-width="10" stroke-linecap="round"/>
+      <rect x="132" y="27" width="74" height="30" rx="10" fill="url(#green)"/>
+      <path d="M206 42h74" stroke="#9aa9a0" stroke-width="3" stroke-linecap="round"/>
+      <rect x="0" y="30" width="60" height="24" rx="8" fill="#f4fbf6" stroke="#b7cdbf" stroke-width="2"/>
+      <rect x="18" y="33" width="8" height="18" rx="2" fill="#3e6d4f" opacity="0.4"/>
+      <rect x="34" y="33" width="8" height="18" rx="2" fill="#3e6d4f" opacity="0.4"/>
+      <path d="M68 42h30" stroke="#ffffff" stroke-width="5" stroke-linecap="round" opacity="0.8"/>
+      <path d="M60 26v32" stroke="#ffffff" stroke-width="3" opacity="0.7"/>
+      <path d="M114 26v32" stroke="#ffffff" stroke-width="3" opacity="0.7"/>
+    </g>
+
+    <rect x="208" y="356" width="108" height="34" rx="17" fill="#ffffff" opacity="0.7"/>
+    <text x="223" y="379" fill="#244c33" font-family="Helvetica, Arial, sans-serif" font-size="16" font-weight="600" letter-spacing="1">50 / BOX</text>
+    <text x="210" y="406" fill="#5b7d67" font-family="Helvetica, Arial, sans-serif" font-size="13" letter-spacing="1">STERILE · FDA 510(k) · ISO 13485</text>
+  </g>
+  <text x="48" y="552" fill="#737d75" font-family="Helvetica, Arial, sans-serif" font-size="13" letter-spacing="1">22G IV CANNULA · 500 BOXES</text>
+</svg>

@@ -1,0 +1,2 @@
+# The sourcing worker uses only the Python standard library.
+# The Docker image installs no third-party packages.

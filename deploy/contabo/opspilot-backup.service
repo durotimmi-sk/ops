@@ -1,0 +1,7 @@
+[Unit]
+Description=Create and verify an OpsPilot SQLite backup
+After=opspilot.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/opspilot-backup

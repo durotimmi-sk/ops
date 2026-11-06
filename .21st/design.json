@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "project": {
+    "name": "ops",
+    "productType": null,
+    "stack": []
+  },
+  "sources": {
+    "tokens": [],
+    "components": [],
+    "assets": [
+      "assets"
+    ],
+    "instructions": [
+      "DESIGN.md",
+      "PRODUCT.md"
+    ]
+  },
+  "design": {
+    "colorMode": "unknown",
+    "colors": {},
+    "typography": {},
+    "spacing": {},
+    "radius": {},
+    "shadows": {},
+    "motion": {},
+    "density": "unknown"
+  },
+  "components": {
+    "installed": [],
+    "preferredPrimitives": [],
+    "patterns": []
+  },
+  "constraints": {
+    "must": [],
+    "avoid": []
+  },
+  "decisions": [
+    {
+      "decision": "Show a collapsible procurement task rail beside the chat on desktop, and as a dismissible drawer on smaller screens. Use the existing colored mascot plus a small working GIF during active runs.",
+      "date": "2026-11-05",
+      "scope": "assistant workspace"
+    },
+    {
+      "decision": "Keep the collapsed desktop navigation as a 64px icon rail with accessible labels and tooltips. Show sandbox status as labelled text without a decorative pointer or dot. Keep navigation and procurement context as independent panels, and as mutually exclusive drawers on small screens.",
+      "date": "2026-11-05",
+      "scope": "workspace navigation"
+    }
+  ],
+  "evidence": [
+    {
+      "fact": "project.instructions",
+      "source": "DESIGN.md"
+    },
+    {
+      "fact": "project.instructions",
+      "source": "PRODUCT.md"
+    }
+  ],
+  "generatedAt": "2026-11-05T20:31:35.825Z"
+}

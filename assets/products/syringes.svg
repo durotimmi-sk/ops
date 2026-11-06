@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" role="img" aria-label="Box of sterile 5 mL syringes with needles">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f7f8f8"/>
+      <stop offset="0.55" stop-color="#eef0f1"/>
+      <stop offset="1" stop-color="#e1e5e7"/>
+    </linearGradient>
+    <linearGradient id="box" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#eef5f8"/>
+      <stop offset="0.5" stop-color="#d9e8ee"/>
+      <stop offset="1" stop-color="#bcd4de"/>
+    </linearGradient>
+    <linearGradient id="side" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#9cb7c2"/>
+      <stop offset="1" stop-color="#c0d6df"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.95"/>
+      <stop offset="0.5" stop-color="#eaf4f7" stop-opacity="0.7"/>
+      <stop offset="1" stop-color="#c4dae1" stop-opacity="0.9"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="180%">
+      <feColorMatrix type="matrix" values="0 0 0 0 0.06 0 0 0 0 0.09 0 0 0 0 0.1 0 0 0 0.22 0"/>
+      <feGaussianBlur stdDeviation="15"/>
+    </filter>
+  </defs>
+  <rect width="800" height="600" fill="url(#bg)"/>
+  <circle cx="650" cy="120" r="170" fill="#ffffff" opacity="0.7"/>
+  <circle cx="120" cy="520" r="200" fill="#ffffff" opacity="0.44"/>
+  <ellipse cx="405" cy="484" rx="255" ry="44" fill="#111111" opacity="0.14" filter="url(#shadow)"/>
+
+  <g transform="rotate(-3 400 330)">
+    <path d="M198 195h392l36 44v196l-48 48H198z" fill="url(#side)"/>
+    <rect x="170" y="166" width="428" height="252" rx="16" fill="url(#box)"/>
+    <rect x="170" y="166" width="428" height="252" rx="16" fill="#ffffff" opacity="0.28"/>
+    <path d="M170 190h428" stroke="#ffffff" stroke-width="2" opacity="0.6"/>
+
+    <text x="206" y="222" fill="#446674" font-family="Helvetica, Arial, sans-serif" font-size="20" font-weight="700" letter-spacing="5">NORTHBRIDGE</text>
+    <text x="206" y="296" fill="#173743" font-family="Helvetica, Arial, sans-serif" font-size="58" font-weight="700" letter-spacing="-2">SYRINGE</text>
+    <text x="208" y="330" fill="#426a78" font-family="Helvetica, Arial, sans-serif" font-size="21" font-weight="500" letter-spacing="2">5 mL · LUER LOCK · STERILE</text>
+
+    <g transform="translate(430 216) rotate(-16)">
+      <rect x="0" y="26" width="118" height="40" rx="9" fill="url(#glass)" stroke="#8eb0bb" stroke-width="2"/>
+      <rect x="8" y="34" width="66" height="24" rx="4" fill="#e7f5f8" opacity="0.8"/>
+      <rect x="118" y="36" width="34" height="20" rx="5" fill="#c2d7de" stroke="#8eb0bb" stroke-width="2"/>
+      <rect x="151" y="43" width="74" height="6" rx="3" fill="#9fb9c2"/>
+      <path d="M225 46h38" stroke="#7f9aa4" stroke-width="3" stroke-linecap="round"/>
+      <rect x="20" y="30" width="6" height="32" rx="2" fill="#173743" opacity="0.35"/>
+      <rect x="36" y="30" width="4" height="32" rx="2" fill="#173743" opacity="0.35"/>
+      <rect x="52" y="30" width="4" height="32" rx="2" fill="#173743" opacity="0.35"/>
+      <rect x="68" y="30" width="4" height="32" rx="2" fill="#173743" opacity="0.35"/>
+      <rect x="2" y="17" width="16" height="58" rx="6" fill="#bfd7df" stroke="#8eb0bb" stroke-width="2"/>
+      <rect x="7" y="10" width="6" height="14" rx="3" fill="#9fb9c2"/>
+    </g>
+
+    <rect x="206" y="356" width="120" height="34" rx="17" fill="#ffffff" opacity="0.7"/>
+    <text x="222" y="379" fill="#244a57" font-family="Helvetica, Arial, sans-serif" font-size="16" font-weight="600" letter-spacing="1">100 / BOX</text>
+    <text x="208" y="406" fill="#5b7d89" font-family="Helvetica, Arial, sans-serif" font-size="13" letter-spacing="1">22G × 1.5 in · FDA 510(k)</text>
+  </g>
+  <text x="48" y="552" fill="#737a7d" font-family="Helvetica, Arial, sans-serif" font-size="13" letter-spacing="1">STERILE SYRINGES · 500 BOXES</text>
+</svg>
